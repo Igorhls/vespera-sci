@@ -158,7 +158,10 @@ def renderizar_grafico_linhas(
     else:
         ax.yaxis.set_major_locator(ticker.MultipleLocator(2))
 
-    ax.grid(exibir_grade, color="#e0e0e0", linestyle="--", linewidth=0.6)
+    if exibir_grade:
+        ax.grid(True, color="#e0e0e0", linestyle="--", linewidth=0.6)
+    else:
+        ax.grid(False)
 
     ax.set_xlabel(rotulo_x, fontsize=tamanho_fonte, color="black", labelpad=8)
     ax.set_ylabel(rotulo_y, fontsize=tamanho_fonte, color="black", labelpad=8)

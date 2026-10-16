@@ -58,17 +58,18 @@ vespera-sci/
 ## 🗺️ Roadmap de Desenvolvimento
 
 - [x] **Etapa 1:** Estruturação do repositório `vespera-sci`, documentação oficial e desacoplamento completo do motor científico/gráfico (`config/` e `core/`).
-- [ ] **Etapa 2:** Construção da Interface Gráfica Desktop em **PySide6** (`main.py` e pacote `ui/`) com tabela estilo Excel, Canvas interativo do Matplotlib e barra de gerenciamento de projetos.
-- [ ] **Etapa 3:** Implementação do módulo de **Auto-Update via GitHub** (`core/updater.py` + modal de atualização) e script de empacotamento executável (`.exe`).
+- [x] **Etapa 2:** Construção da Interface Gráfica Desktop em **PySide6** (`main.py` e pacote `ui/`) com tabela estilo Excel, Canvas interativo do Matplotlib com legenda arrastável pelo mouse e barra de gerenciamento de projetos.
+- [ ] **Etapa 3:** Implementação do módulo de **Auto-Update via GitHub** (`core/updater.py` + modal de atualização) e script de empacotamento executável (`.exe` / lançador).
 
 ---
 
-## 📦 Instalação do Ambiente de Desenvolvimento
+## 🚀 Como Executar Localmente
 
 ```bash
 git clone https://github.com/Igorhls/vespera-sci.git
 cd vespera-sci
 py -m pip install -r requirements.txt
+py main.py
 ```
 
 ---
