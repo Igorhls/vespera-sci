@@ -11,11 +11,13 @@ env/
 venv/
 ENV/
 
-# Empacotamento / PyInstaller
+# Empacotamento / PyInstaller / Auto-Updater
 build/
 dist/
 *.spec
 updater_temp/
+.last_update_sha
+projetos_salvos.json
 
 # IDEs
 .vscode/

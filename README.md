@@ -59,17 +59,29 @@ vespera-sci/
 
 - [x] **Etapa 1:** Estruturação do repositório `vespera-sci`, documentação oficial e desacoplamento completo do motor científico/gráfico (`config/` e `core/`).
 - [x] **Etapa 2:** Construção da Interface Gráfica Desktop em **PySide6** (`main.py` e pacote `ui/`) com tabela estilo Excel, Canvas interativo do Matplotlib com legenda arrastável pelo mouse e barra de gerenciamento de projetos.
-- [ ] **Etapa 3:** Implementação do módulo de **Auto-Update via GitHub** (`core/updater.py` + modal de atualização) e script de empacotamento executável (`.exe` / lançador).
+- [x] **Etapa 3:** Implementação do módulo de **Auto-Update via GitHub** (`core/updater.py` + `ui/update_dialog.py`), instalador de atalho com 1 clique (`Instalar_Vespera_Sci.bat` / `Iniciar_Vespera_Sci.bat`) e empacotador `.exe` (`build_exe.py`).
 
 ---
 
-## 🚀 Como Executar Localmente
+## 🚀 Como Instalar e Executar Localmente
 
+### Opção 1: Instalação com 1 Clique (Windows)
+1. Baixe ou clone este repositório.
+2. Dê dois cliques em **`Instalar_Vespera_Sci.bat`** — ele instalará automaticamente as dependências necessárias e criará o atalho **"Vespera Sci"** na sua Área de Trabalho.
+3. Sempre que quiser abrir o programa, use o atalho na Área de Trabalho ou dê dois cliques em **`Iniciar_Vespera_Sci.bat`**.
+4. Dentro do programa, clique no botão **`🔄 Verificar Atualizações (GitHub)`** no canto superior direito para buscar e instalar novas versões enviadas ao repositório.
+
+### Opção 2: Via Terminal
 ```bash
 git clone https://github.com/Igorhls/vespera-sci.git
 cd vespera-sci
 py -m pip install -r requirements.txt
 py main.py
+```
+
+### Opção 3: Gerar Executável Independente (`.exe`)
+```bash
+py build_exe.py
 ```
 
 ---
