@@ -106,7 +106,7 @@ class SidebarControlsWidget(QScrollArea):
         self.tipo_grafico = "linhas"
         self.setWidgetResizable(True)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.setFixedWidth(320)
+        self.setFixedWidth(260)
 
         self.container = QWidget()
         self.setWidget(self.container)

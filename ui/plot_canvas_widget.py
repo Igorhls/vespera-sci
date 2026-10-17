@@ -32,7 +32,7 @@ class PlotCanvasWidget(QWidget):
         self._updating_ui = False
         self.tipo_grafico = "linhas"
 
-        self.fig = Figure(figsize=(7.6, 4.8), dpi=100)
+        self.fig = Figure(figsize=(9.2, 5.8), dpi=100)
         self.canvas = FigureCanvasQTAgg(self.fig)
         self.toolbar = NavigationToolbar2QT(self.canvas, self)
 
@@ -43,12 +43,12 @@ class PlotCanvasWidget(QWidget):
         layout.setContentsMargins(6, 6, 6, 6)
         layout.setSpacing(8)
 
-        # 1. Barra de Séries Visíveis
+        # 1. Barra Superior Integrada: Séries no Gráfico + Dica de Interatividade
         self.frame_series = QFrame()
         self.frame_series.setObjectName("cardPanel")
         series_layout = QHBoxLayout(self.frame_series)
         series_layout.setContentsMargins(12, 8, 12, 8)
-        series_layout.setSpacing(12)
+        series_layout.setSpacing(10)
 
         lbl_vis = QLabel("<b>Séries no Gráfico:</b>")
         series_layout.addWidget(lbl_vis)
@@ -76,22 +76,15 @@ class PlotCanvasWidget(QWidget):
             series_layout.addWidget(chk)
 
         series_layout.addStretch()
+
+        lbl_dica = QLabel(
+            "<span style='color: #64748b; font-size: 11px;'><b>Dica:</b> Arraste a legenda livremente &bull; Barra inferior para zoom e pan</span>"
+        )
+        series_layout.addWidget(lbl_dica)
+
         layout.addWidget(self.frame_series)
 
-        # 2. Dica de Interatividade
-        dica_frame = QFrame()
-        dica_frame.setObjectName("cardPanel")
-        df_layout = QHBoxLayout(dica_frame)
-        df_layout.setContentsMargins(10, 6, 10, 6)
-        lbl_dica = QLabel(
-            "<b>Interatividade:</b> Clique e arraste a legenda com o mouse para reposicioná-la livremente. "
-            "Use a barra inferior para zoom e pan."
-        )
-        lbl_dica.setStyleSheet("color: #64748b; font-size: 11.5px;")
-        df_layout.addWidget(lbl_dica)
-        layout.addWidget(dica_frame)
-
-        # 3. Canvas Principal em Card Moderno
+        # 2. Canvas Principal em Card Moderno
         canvas_card = QFrame()
         canvas_card.setObjectName("cardPanel")
         cc_layout = QVBoxLayout(canvas_card)
@@ -99,7 +92,7 @@ class PlotCanvasWidget(QWidget):
         cc_layout.setSpacing(6)
         cc_layout.setAlignment(Qt.AlignCenter)
 
-        self.canvas.setFixedSize(760, 480)
+        self.canvas.setFixedSize(920, 580)
         cc_layout.addWidget(self.canvas, 0, Qt.AlignCenter)
         cc_layout.addWidget(self.toolbar, 0, Qt.AlignCenter)
 

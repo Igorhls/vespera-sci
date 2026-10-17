@@ -1,7 +1,7 @@
 {
-  "version": "1.3.0",
+  "version": "1.3.1",
   "release_date": "2026-10-17",
   "repo": "Igorhls/vespera-sci",
   "branch": "main",
-  "notes": "Vespera Sci Alpha — Painéis de interface fixados (Sidebar 320px, Tabela 480px), divisores travados e proporção científica padrão do gráfico 760x480 (16:10) preservada"
+  "notes": "Vespera Sci Alpha — Otimização de espaço: barra lateral compacta (260px), foco na tabela de dados (580px sem cortes nos botões e campos) e gráfico científico expandido para 920x580 com barra integrada"
 }

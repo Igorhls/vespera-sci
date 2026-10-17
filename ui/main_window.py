@@ -44,7 +44,7 @@ class VesperaMainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Vespera Sci Alpha — Scientific Plotting & Data Studio")
-        self.resize(1620, 880)
+        self.resize(1840, 950)
         self.setMinimumSize(1580, 820)
 
         # Ícone oficial da janela e da barra de tarefas
@@ -277,7 +277,7 @@ class VesperaMainWindow(QMainWindow):
         self.splitter.setStretchFactor(0, 0)
         self.splitter.setStretchFactor(1, 0)
         self.splitter.setStretchFactor(2, 1)
-        self.splitter.setSizes([320, 480, 800])
+        self.splitter.setSizes([260, 580, 960])
 
         # Travar os divisores para que as janelas fiquem fixas e não sofram desajuste
         for i in range(self.splitter.count()):
