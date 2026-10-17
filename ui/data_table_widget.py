@@ -104,13 +104,15 @@ class DataTableWidget(QWidget):
         grid_meta.addWidget(self.txt_titulo_grafico, 0, 3)
 
         self.txt_rotulo_x = QLineEdit()
+        self.txt_rotulo_x.setPlaceholderText("Texto abaixo do eixo X (ou vazio)")
         self.txt_rotulo_x.textChanged.connect(self._on_meta_changed)
         self.txt_rotulo_y = QLineEdit()
+        self.txt_rotulo_y.setPlaceholderText("Texto ao lado do eixo Y (ex: Ta (°C))")
         self.txt_rotulo_y.textChanged.connect(self._on_meta_changed)
 
-        grid_meta.addWidget(QLabel("<b>Eixo X:</b>"), 1, 0)
+        grid_meta.addWidget(QLabel("<b>Eixo X (Abaixo):</b>"), 1, 0)
         grid_meta.addWidget(self.txt_rotulo_x, 1, 1)
-        grid_meta.addWidget(QLabel("<b>Eixo Y:</b>"), 1, 2)
+        grid_meta.addWidget(QLabel("<b>Eixo Y (Ao Lado):</b>"), 1, 2)
         grid_meta.addWidget(self.txt_rotulo_y, 1, 3)
 
         self.spn_min_y = QDoubleSpinBox()

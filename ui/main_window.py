@@ -406,7 +406,7 @@ class VesperaMainWindow(QMainWindow):
         if novo_modo == self.tipo_grafico_atual:
             return
         if novo_modo == "barras":
-            self._carregar_preset("TA — Média e Desvio Padrão (Agosto e Dezembro)")
+            self._carregar_preset("Ta (°C) — Média e Desvio Padrão (Modelo OriginLab da Pesquisa)")
         else:
             self._carregar_preset("Dia 14 de Agosto")
 
@@ -417,13 +417,19 @@ class VesperaMainWindow(QMainWindow):
         if nome_preset in PRESETS_BARRAS:
             p = PRESETS_BARRAS[nome_preset]
             self.tipo_grafico_atual = "barras"
-            self.nome_projeto_atual = "TA - Média e Desvio Padrão"
+            self.nome_projeto_atual = p.get("nome_projeto", "TA - Média e Desvio Padrão")
             cfg["rotulo_x"] = p["rotulo_x"]
             cfg["rotulo_y"] = p["rotulo_y"]
+            cfg["rotulo_s1"] = p.get("rotulo_s1", "Bosque")
+            cfg["rotulo_s2"] = p.get("rotulo_s2", "Desvio/p (Bosque)")
+            cfg["rotulo_s3"] = p.get("rotulo_s3", "Estacionamento")
+            cfg["rotulo_s4"] = p.get("rotulo_s4", "Desvio/p (Estacionamento)")
             cfg["opcao_fonte"] = "Arial (Científico Internacional)"
             cfg["direcao_ticks"] = "Para fora (out)"
             cfg["ticks_topo"] = False
             cfg["ticks_dir"] = False
+            if "config" in p:
+                cfg.update(p["config"])
             df_alvo = p["df"].copy()
             titulo_dia = p["titulo_dia"]
             titulo_grafico = p["titulo_grafico"]
@@ -537,6 +543,17 @@ class VesperaMainWindow(QMainWindow):
             self.table_widget.spn_intervalo_ticks_y.blockSignals(True)
             self.table_widget.spn_intervalo_ticks_y.setValue(side_passo)
             self.table_widget.spn_intervalo_ticks_y.blockSignals(False)
+
+        if self.sidebar.txt_rotulo_x.text() != self.table_widget.txt_rotulo_x.text():
+            self.table_widget.txt_rotulo_x.blockSignals(True)
+            self.table_widget.txt_rotulo_x.setText(self.sidebar.txt_rotulo_x.text())
+            self.table_widget.txt_rotulo_x.blockSignals(False)
+
+        if self.sidebar.txt_rotulo_y.text() != self.table_widget.txt_rotulo_y.text():
+            self.table_widget.txt_rotulo_y.blockSignals(True)
+            self.table_widget.txt_rotulo_y.setText(self.sidebar.txt_rotulo_y.text())
+            self.table_widget.txt_rotulo_y.blockSignals(False)
+
         self.atualizar_grafico()
 
     def _on_table_meta_changed(self):
@@ -545,6 +562,17 @@ class VesperaMainWindow(QMainWindow):
             self.sidebar.spn_intervalo_ticks_y.blockSignals(True)
             self.sidebar.spn_intervalo_ticks_y.setValue(meta_passo)
             self.sidebar.spn_intervalo_ticks_y.blockSignals(False)
+
+        if self.table_widget.txt_rotulo_x.text() != self.sidebar.txt_rotulo_x.text():
+            self.sidebar.txt_rotulo_x.blockSignals(True)
+            self.sidebar.txt_rotulo_x.setText(self.table_widget.txt_rotulo_x.text())
+            self.sidebar.txt_rotulo_x.blockSignals(False)
+
+        if self.table_widget.txt_rotulo_y.text() != self.sidebar.txt_rotulo_y.text():
+            self.sidebar.txt_rotulo_y.blockSignals(True)
+            self.sidebar.txt_rotulo_y.setText(self.table_widget.txt_rotulo_y.text())
+            self.sidebar.txt_rotulo_y.blockSignals(False)
+
         self.atualizar_grafico()
 
     def atualizar_grafico(self):
@@ -675,6 +703,7 @@ class VesperaMainWindow(QMainWindow):
                 legenda_config=legenda_config,
                 exibir_grade=cfg["exibir_grade"],
                 fig=self.plot_widget.fig,
+                hachuras_barras=self.sidebar.obter_hachuras_barras_ativas(),
             )
 
         self.plot_widget.atualizar_canvas()

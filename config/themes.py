@@ -28,6 +28,12 @@ PALETAS_LINHAS = {
 
 # Paletas de cores para Gráfico de Barras Agrupadas (Média e Desvio Padrão)
 PALETAS_BARRAS = {
+    "OriginLab Hachurado (Verde, Cinza, Laranja //, Branco ..)": {
+        "Bosque": "#2ca02c",
+        "Desvio_Bosque": "#b0b7bd",
+        "Estacionamento": "#d95f02",
+        "Desvio_Estacionamento": "#ffffff",
+    },
     "OriginLab Pastel (Padrão do Modelo)": {
         "Bosque": "#fdc086",
         "Desvio_Bosque": "#8fd194",
@@ -52,6 +58,59 @@ PALETAS_BARRAS = {
         "Estacionamento": "#31a354",
         "Desvio_Estacionamento": "#a1d99b",
     },
+}
+
+PALETAS_BARRAS_HACHURAS = {
+    "OriginLab Hachurado (Verde, Cinza, Laranja //, Branco ..)": {
+        "Bosque": None,
+        "Desvio_Bosque": None,
+        "Estacionamento": "//",
+        "Desvio_Estacionamento": "..",
+    },
+    "OriginLab Pastel (Padrão do Modelo)": {
+        "Bosque": None,
+        "Desvio_Bosque": None,
+        "Estacionamento": None,
+        "Desvio_Estacionamento": None,
+    },
+    "OriginLab Clássico (Cores Vibrantes)": {
+        "Bosque": None,
+        "Desvio_Bosque": None,
+        "Estacionamento": None,
+        "Desvio_Estacionamento": None,
+    },
+    "Acadêmico Monocromático (Escala de Cinza)": {
+        "Bosque": None,
+        "Desvio_Bosque": None,
+        "Estacionamento": None,
+        "Desvio_Estacionamento": None,
+    },
+    "Nature / Científico (Azul & Verde)": {
+        "Bosque": None,
+        "Desvio_Bosque": None,
+        "Estacionamento": None,
+        "Desvio_Estacionamento": None,
+    },
+}
+
+HACHURAS_DISPONIVEIS = [
+    "Nenhum (Sólido)",
+    "Diagonal Direita (//)",
+    "Diagonal Esquerda (\\\\)",
+    "Pontilhado / Pontos (..)",
+    "Cruzado / Xadrez (xx)",
+    "Linhas Horizontais (--)",
+    "Linhas Verticais (||)",
+]
+
+MAPA_HACHURAS = {
+    "Nenhum (Sólido)": None,
+    "Diagonal Direita (//)": "//",
+    "Diagonal Esquerda (\\\\)": "\\\\",
+    "Pontilhado / Pontos (..)": "..",
+    "Cruzado / Xadrez (xx)": "xx",
+    "Linhas Horizontais (--)": "--",
+    "Linhas Verticais (||)": "||",
 }
 
 FONTES_DISPONIVEIS = [
@@ -142,6 +201,10 @@ DEFAULT_CONFIG = {
     "cor_moldura": "#000000",
     "esp_moldura": 1.15,
     "intervalo_ticks_y": 0.0,
+    "hachura_bosque": "Nenhum (Sólido)",
+    "hachura_desvio_bosque": "Nenhum (Sólido)",
+    "hachura_estacionamento": "Diagonal Direita (//)",
+    "hachura_desvio_estacionamento": "Pontilhado / Pontos (..)",
 }
 
 MODOS_ESTILO_LINHAS = [

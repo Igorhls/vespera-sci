@@ -273,10 +273,11 @@ def renderizar_grafico_barras(
     legenda_config: dict,
     exibir_grade: bool,
     fig=None,
+    hachuras_barras: dict = None,
 ):
     """
     Renderiza o Gráfico de Barras Agrupadas (Média e Desvio Padrão: Bosque vs Estacionamento)
-    no padrão OriginLab Pro com suporte a legenda arrastável.
+    no padrão OriginLab Pro com suporte a padrões de hachura (hatches) e legenda arrastável.
     """
     configurar_fonte_matplotlib(fonte_nome)
 
@@ -313,6 +314,7 @@ def renderizar_grafico_barras(
             valores = pd.to_numeric(df[col_name], errors="coerce").fillna(0.0).tolist()
             posicoes_x = x_indices + offsets[idx_s]
             cor_b = cores_barras.get(col_name, "#cccccc")
+            hatch_b = hachuras_barras.get(col_name) if hachuras_barras else None
 
             barras = ax.bar(
                 posicoes_x,
@@ -320,8 +322,9 @@ def renderizar_grafico_barras(
                 width=largura_barra,
                 label=label_leg,
                 color=cor_b,
-                edgecolor="#707070",
-                linewidth=0.75,
+                edgecolor="black",
+                linewidth=0.9,
+                hatch=hatch_b,
                 zorder=3,
             )
 

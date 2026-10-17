@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QRadioButton,
     QScrollArea,
@@ -29,10 +30,13 @@ from config.themes import (
     COORDENADAS_LEGENDA_PRESET,
     DEFAULT_CONFIG,
     FONTES_DISPONIVEIS,
+    HACHURAS_DISPONIVEIS,
+    MAPA_HACHURAS,
     MAPA_SIMBOLOS,
     MAPA_TRACOS,
     MODOS_ESTILO_LINHAS,
     PALETAS_BARRAS,
+    PALETAS_BARRAS_HACHURAS,
     PALETAS_LINHAS,
     POSICOES_LEGENDA,
 )
@@ -359,6 +363,25 @@ class SidebarControlsWidget(QScrollArea):
         l_eixos.setContentsMargins(6, 8, 6, 8)
         l_eixos.setSpacing(10)
 
+        grp_titulos = QGroupBox("Títulos e Rótulos dos Eixos")
+        form_titulos = QFormLayout(grp_titulos)
+        form_titulos.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        form_titulos.setLabelAlignment(Qt.AlignLeft)
+        form_titulos.setHorizontalSpacing(8)
+        form_titulos.setVerticalSpacing(8)
+
+        self.txt_rotulo_y = QLineEdit()
+        self.txt_rotulo_y.setPlaceholderText("Ex: Ta (°C) ou Temperatura do ar (°C)")
+        self.txt_rotulo_y.textChanged.connect(self._emit_change)
+
+        self.txt_rotulo_x = QLineEdit()
+        self.txt_rotulo_x.setPlaceholderText("Ex: Pontos, Meses ou deixe vazio")
+        self.txt_rotulo_x.textChanged.connect(self._emit_change)
+
+        form_titulos.addRow("Eixo Y (Ao Lado):", self.txt_rotulo_y)
+        form_titulos.addRow("Eixo X (Abaixo):", self.txt_rotulo_x)
+        l_eixos.addWidget(grp_titulos)
+
         grp_bordas = QGroupBox("Bordas do Quadro")
         grid_b = QGridLayout(grp_bordas)
         grid_b.setHorizontalSpacing(8)
@@ -546,13 +569,40 @@ class SidebarControlsWidget(QScrollArea):
         vl_cb_custom = QVBoxLayout(self.widget_cores_barras_custom)
         vl_cb_custom.setContentsMargins(0, 4, 0, 0)
         vl_cb_custom.setSpacing(6)
-        self.btn_cor_bosque = ColorButton("#fdc086", "Bosque")
-        self.btn_cor_db = ColorButton("#8fd194", "Desvio Bosque")
-        self.btn_cor_estac = ColorButton("#c2b2d6", "Estacionamento")
-        self.btn_cor_de = ColorButton("#ffff99", "Desvio Estacionamento")
+
+        grid_cb = QGridLayout()
+        grid_cb.setHorizontalSpacing(8)
+        grid_cb.setVerticalSpacing(6)
+
+        self.btn_cor_bosque = ColorButton("#2ca02c", "Bosque")
+        self.btn_cor_db = ColorButton("#b0b7bd", "Desvio Bosque")
+        self.btn_cor_estac = ColorButton("#d95f02", "Estacionamento")
+        self.btn_cor_de = ColorButton("#ffffff", "Desvio Estac.")
+
+        self.cmb_hachura_bosque = QComboBox()
+        self.cmb_hachura_db = QComboBox()
+        self.cmb_hachura_estac = QComboBox()
+        self.cmb_hachura_de = QComboBox()
+
+        for cmb in (self.cmb_hachura_bosque, self.cmb_hachura_db, self.cmb_hachura_estac, self.cmb_hachura_de):
+            cmb.addItems(HACHURAS_DISPONIVEIS)
+            cmb.currentIndexChanged.connect(self._emit_change)
+
         for b in (self.btn_cor_bosque, self.btn_cor_db, self.btn_cor_estac, self.btn_cor_de):
             b.colorChanged.connect(self._emit_change)
-            vl_cb_custom.addWidget(b)
+
+        itens_barras = [
+            ("S1 (Bosque):", self.btn_cor_bosque, self.cmb_hachura_bosque),
+            ("S2 (Desvio B.):", self.btn_cor_db, self.cmb_hachura_db),
+            ("S3 (Estac.):", self.btn_cor_estac, self.cmb_hachura_estac),
+            ("S4 (Desvio E.):", self.btn_cor_de, self.cmb_hachura_de),
+        ]
+        for row_i, (lbl_txt, btn_c, cmb_h) in enumerate(itens_barras):
+            grid_cb.addWidget(QLabel(f"<b>{lbl_txt}</b>"), row_i, 0)
+            grid_cb.addWidget(btn_c, row_i, 1)
+            grid_cb.addWidget(cmb_h, row_i, 2)
+
+        vl_cb_custom.addLayout(grid_cb)
         self.widget_cores_barras_custom.setVisible(False)
         cb_layout.addWidget(self.widget_cores_barras_custom)
         self.grp_cores_barras.setVisible(False)
@@ -596,10 +646,14 @@ class SidebarControlsWidget(QScrollArea):
         self._set_combo_text(
             self.cmb_paleta_barras, cfg.get("opcao_paleta_barras", DEFAULT_CONFIG["opcao_paleta_barras"])
         )
-        self.btn_cor_bosque.set_color(cfg.get("cor_bosque", "#fdc086"))
-        self.btn_cor_db.set_color(cfg.get("cor_desvio_bosque", "#8fd194"))
-        self.btn_cor_estac.set_color(cfg.get("cor_estacionamento", "#c2b2d6"))
-        self.btn_cor_de.set_color(cfg.get("cor_desvio_estacionamento", "#ffff99"))
+        self.btn_cor_bosque.set_color(cfg.get("cor_bosque", "#2ca02c"))
+        self.btn_cor_db.set_color(cfg.get("cor_desvio_bosque", "#b0b7bd"))
+        self.btn_cor_estac.set_color(cfg.get("cor_estacionamento", "#d95f02"))
+        self.btn_cor_de.set_color(cfg.get("cor_desvio_estacionamento", "#ffffff"))
+        self._set_hachura_combo(self.cmb_hachura_bosque, cfg.get("hachura_bosque"))
+        self._set_hachura_combo(self.cmb_hachura_db, cfg.get("hachura_desvio_bosque"))
+        self._set_hachura_combo(self.cmb_hachura_estac, cfg.get("hachura_estacionamento"))
+        self._set_hachura_combo(self.cmb_hachura_de, cfg.get("hachura_desvio_estacionamento"))
         self.widget_cores_barras_custom.setVisible("Personalizada" in self.cmb_paleta_barras.currentText())
 
         modo_linhas = cfg.get("modo_estilo_linhas")
@@ -663,6 +717,8 @@ class SidebarControlsWidget(QScrollArea):
         self.btn_cor_moldura.set_color(cfg.get("cor_moldura", "#000000"))
         self.spn_esp_moldura.setValue(float(cfg.get("esp_moldura", 1.15)))
         self.spn_intervalo_ticks_y.setValue(float(cfg.get("intervalo_ticks_y", 0.0)))
+        self.txt_rotulo_x.setText(str(cfg.get("rotulo_x", "")))
+        self.txt_rotulo_y.setText(str(cfg.get("rotulo_y", "")))
 
         self._updating_ui = False
 
@@ -719,6 +775,12 @@ class SidebarControlsWidget(QScrollArea):
             "cor_moldura": self.btn_cor_moldura.get_color(),
             "esp_moldura": float(self.spn_esp_moldura.value()),
             "intervalo_ticks_y": float(self.spn_intervalo_ticks_y.value()),
+            "rotulo_x": self.txt_rotulo_x.text(),
+            "rotulo_y": self.txt_rotulo_y.text(),
+            "hachura_bosque": MAPA_HACHURAS.get(self.cmb_hachura_bosque.currentText()),
+            "hachura_desvio_bosque": MAPA_HACHURAS.get(self.cmb_hachura_db.currentText()),
+            "hachura_estacionamento": MAPA_HACHURAS.get(self.cmb_hachura_estac.currentText()),
+            "hachura_desvio_estacionamento": MAPA_HACHURAS.get(self.cmb_hachura_de.currentText()),
         }
 
     def obter_cores_linhas_ativas(self) -> dict:
@@ -808,8 +870,43 @@ class SidebarControlsWidget(QScrollArea):
         self._emit_change()
 
     def _on_paleta_barras_changed(self):
-        self.widget_cores_barras_custom.setVisible("Personalizada" in self.cmb_paleta_barras.currentText())
+        paleta = self.cmb_paleta_barras.currentText()
+        is_custom = "Personalizada" in paleta
+        self.widget_cores_barras_custom.setVisible(is_custom)
+        if not is_custom and paleta in PALETAS_BARRAS:
+            c = PALETAS_BARRAS[paleta]
+            h = PALETAS_BARRAS_HACHURAS.get(paleta, {})
+            self._updating_ui = True
+            self.btn_cor_bosque.set_color(c.get("Bosque", "#2ca02c"))
+            self.btn_cor_db.set_color(c.get("Desvio_Bosque", "#b0b7bd"))
+            self.btn_cor_estac.set_color(c.get("Estacionamento", "#d95f02"))
+            self.btn_cor_de.set_color(c.get("Desvio_Estacionamento", "#ffffff"))
+
+            self._set_hachura_combo(self.cmb_hachura_bosque, h.get("Bosque"))
+            self._set_hachura_combo(self.cmb_hachura_db, h.get("Desvio_Bosque"))
+            self._set_hachura_combo(self.cmb_hachura_estac, h.get("Estacionamento"))
+            self._set_hachura_combo(self.cmb_hachura_de, h.get("Desvio_Estacionamento"))
+            self._updating_ui = False
         self._emit_change()
+
+    def obter_hachuras_barras_ativas(self) -> dict:
+        paleta = self.cmb_paleta_barras.currentText()
+        if "Personalizada" not in paleta and paleta in PALETAS_BARRAS_HACHURAS:
+            return PALETAS_BARRAS_HACHURAS[paleta]
+        return {
+            "Bosque": MAPA_HACHURAS.get(self.cmb_hachura_bosque.currentText()),
+            "Desvio_Bosque": MAPA_HACHURAS.get(self.cmb_hachura_db.currentText()),
+            "Estacionamento": MAPA_HACHURAS.get(self.cmb_hachura_estac.currentText()),
+            "Desvio_Estacionamento": MAPA_HACHURAS.get(self.cmb_hachura_de.currentText()),
+        }
+
+    @staticmethod
+    def _set_hachura_combo(combo: QComboBox, hatch_val):
+        for nome_ext, h_val in MAPA_HACHURAS.items():
+            if h_val == hatch_val or (h_val is None and hatch_val in (None, "", "None")):
+                combo.setCurrentText(nome_ext)
+                return
+        combo.setCurrentIndex(0)
 
     def _on_pos_preset_changed(self):
         if self._updating_ui:

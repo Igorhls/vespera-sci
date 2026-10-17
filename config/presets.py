@@ -47,12 +47,17 @@ PRESETS_LINHAS = {
 }
 
 PRESETS_BARRAS = {
-    "TA — Média e Desvio Padrão (Agosto e Dezembro)": {
+    "Ta (°C) — Média e Desvio Padrão (Modelo OriginLab da Pesquisa)": {
         "tipo_grafico": "barras",
-        "titulo_dia": "TA",
+        "nome_projeto": "Ta (°C) - Média e Desvio Padrão",
+        "titulo_dia": "Ta (°C)",
         "titulo_grafico": "",
-        "rotulo_x": "TA",
-        "rotulo_y": "Média (%)",
+        "rotulo_x": "",
+        "rotulo_y": "Ta (°C)",
+        "rotulo_s1": "Bosque",
+        "rotulo_s2": "Desvio/p (Bosque)",
+        "rotulo_s3": "Estacionamento",
+        "rotulo_s4": "Desvio/p (Estacionamento)",
         "min_y": 0.0,
         "max_y": 35.0,
         "df": pd.DataFrame({
@@ -62,5 +67,44 @@ PRESETS_BARRAS = {
             "Estacionamento": [28.50, 29.40],
             "Desvio_Estacionamento": [4.87, 2.19],
         }),
-    }
+        "config": {
+            "opcao_paleta_barras": "OriginLab Hachurado (Verde, Cinza, Laranja //, Branco ..)",
+            "cor_bosque": "#2ca02c",
+            "cor_desvio_bosque": "#b0b7bd",
+            "cor_estacionamento": "#d95f02",
+            "cor_desvio_estacionamento": "#ffffff",
+            "hachura_bosque": "Nenhum (Sólido)",
+            "hachura_desvio_bosque": "Nenhum (Sólido)",
+            "hachura_estacionamento": "Diagonal Direita (//)",
+            "hachura_desvio_estacionamento": "Pontilhado / Pontos (..)",
+            "intervalo_ticks_y": 5.0,
+            "direcao_ticks": "Para fora (out)",
+            "ticks_topo": False,
+            "ticks_dir": False,
+            "exibir_grade": True,
+            "formato_decimais_barras": "Automático (ex: 27,32 | 2,3)",
+            "negrito_valores_barras": False,
+        },
+    },
+    "TA — Média e Desvio Padrão (Agosto e Dezembro)": {
+        "tipo_grafico": "barras",
+        "nome_projeto": "TA - Média e Desvio Padrão",
+        "titulo_dia": "TA",
+        "titulo_grafico": "",
+        "rotulo_x": "TA",
+        "rotulo_y": "Média (%)",
+        "rotulo_s1": "Bosque",
+        "rotulo_s2": "Desvio/p",
+        "rotulo_s3": "Estacionamento",
+        "rotulo_s4": "Desvio/p",
+        "min_y": 0.0,
+        "max_y": 35.0,
+        "df": pd.DataFrame({
+            "Mes": ["Agosto", "Dezembro"],
+            "Bosque": [27.32, 28.60],
+            "Desvio_Bosque": [2.30, 1.42],
+            "Estacionamento": [28.50, 29.40],
+            "Desvio_Estacionamento": [4.87, 2.19],
+        }),
+    },
 }
