@@ -1,37 +1,34 @@
 @echo off
-chcp 65001 >nul
-title Instalador Vespera Sci Desktop
+setlocal
 cd /d "%~dp0"
+title Instalador Local - Vespera Sci Alpha
 
 echo ======================================================================
 echo   INSTALADOR LOCAL - VESPERA SCI ALPHA
 echo ======================================================================
 echo.
 
-set "PY_CMD="
-py --version >nul 2>&1
-if %errorlevel% equ 0 (
-    set "PY_CMD=py"
-) else (
-    python --version >nul 2>&1
-    if %errorlevel% equ 0 (
-        set "PY_CMD=python"
-    )
+set "PY="
+where py >nul 2>&1
+if %errorlevel% equ 0 set "PY=py"
+if "%PY%"=="" (
+    where python >nul 2>&1
+    if %errorlevel% equ 0 set "PY=python"
 )
 
-if "%PY_CMD%"=="" (
-    echo [AVISO] O Python nao foi encontrado no seu computador!
-    echo Para executar o Vespera Sci, e necessario ter o Python 3.10 ou superior instalado.
+if "%PY%"=="" (
+    echo [AVISO] Python nao foi encontrado no seu computador!
+    echo Instale o Python 3.10+ em https://www.python.org marcando "Add python.exe to PATH".
     pause
     exit /b 1
 )
 
 echo [1/2] Verificando e instalando bibliotecas necessarias...
-%PY_CMD% -m pip install -r requirements.txt
+%PY% -m pip install -r requirements.txt
 
 echo.
 echo [2/2] Criando atalho oficial "Vespera Sci Alpha" na Area de Trabalho...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $d = [Environment]::GetFolderPath('Desktop'); $s = $ws.CreateShortcut((Join-Path $d 'Vespera Sci Alpha.lnk')); $s.TargetPath = '%~dp0Iniciar_Vespera_Sci.bat'; $s.WorkingDirectory = '%~dp0'; $s.IconLocation = '%~dp0assets\app_icon.ico'; $s.WindowStyle = 7; $s.Description = 'Vespera Sci Alpha - Scientific Studio'; $s.Save()"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $d = [Environment]::GetFolderPath('Desktop'); $s = $ws.CreateShortcut((Join-Path $d 'Vespera Sci Alpha.lnk')); $s.TargetPath = (Join-Path '%~dp0' 'Iniciar_Vespera_Sci.bat'); $s.WorkingDirectory = '%~dp0'; $s.IconLocation = (Join-Path '%~dp0' 'assets\app_icon.ico'); $s.WindowStyle = 7; $s.Description = 'Vespera Sci Alpha'; $s.Save()"
 
 echo.
 echo ======================================================================

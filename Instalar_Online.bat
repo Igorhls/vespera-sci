@@ -1,5 +1,5 @@
 @echo off
-chcp 65001 >nul
+setlocal
 title Instalador Online - Vespera Sci Alpha
 
 echo ======================================================================
@@ -16,19 +16,15 @@ set "TEMP_ZIP=%TEMP_DIR%\main.zip"
 if not exist "%TEMP_DIR%" mkdir "%TEMP_DIR%"
 
 echo [1/4] Verificando ambiente Python...
-set "PY_CMD="
-
-py --version >nul 2>&1
-if %errorlevel% equ 0 (
-    set "PY_CMD=py"
-) else (
-    python --version >nul 2>&1
-    if %errorlevel% equ 0 (
-        set "PY_CMD=python"
-    )
+set "PY="
+where py >nul 2>&1
+if %errorlevel% equ 0 set "PY=py"
+if "%PY%"=="" (
+    where python >nul 2>&1
+    if %errorlevel% equ 0 set "PY=python"
 )
 
-if "%PY_CMD%"=="" (
+if "%PY%"=="" (
     echo.
     echo [AVISO] O Python nao foi encontrado no seu computador!
     echo Para executar o Vespera Sci, e necessario instalar o Python 3.10 ou superior.
@@ -43,7 +39,7 @@ if "%PY_CMD%"=="" (
     exit /b 1
 )
 
-echo Python detectado: %PY_CMD%
+echo Python detectado: %PY%
 
 echo.
 echo [2/4] Baixando versao mais recente do GitHub...
@@ -64,14 +60,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -LiteralP
 
 echo.
 echo [4/4] Instalando dependencias cientificas...
-echo Aguarde, configurando PySide6, Matplotlib, Pandas, NumPy, OpenPyXL...
-%PY_CMD% -m pip install -r "%DESTINO%\requirements.txt"
+echo Aguarde, configurando bibliotecas (PySide6, Matplotlib, Pandas, NumPy)...
+%PY% -m pip install -r "%DESTINO%\requirements.txt"
 
 echo.
 echo Criando atalho oficial Vespera Sci Alpha na Area de Trabalho...
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $d = [Environment]::GetFolderPath('Desktop'); $s = $ws.CreateShortcut((Join-Path $d 'Vespera Sci Alpha.lnk')); $s.TargetPath = (Join-Path '%DESTINO%' 'Iniciar_Vespera_Sci.bat'); $s.WorkingDirectory = '%DESTINO%'; $s.IconLocation = (Join-Path '%DESTINO%' 'assets\app_icon.ico'); $s.WindowStyle = 7; $s.Description = 'Vespera Sci Alpha - Scientific Studio'; $s.Save()"
 
-:: Limpeza dos temporarios
 rd /s /q "%TEMP_DIR%" >nul 2>&1
 
 echo.
