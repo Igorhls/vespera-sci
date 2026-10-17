@@ -1,7 +1,7 @@
 {
-  "version": "1.0.0",
-  "release_date": "2026-10-16",
+  "version": "1.1.0",
+  "release_date": "2026-10-17",
   "repo": "Igorhls/vespera-sci",
   "branch": "main",
-  "notes": "Arquitetura modular inicial do Vespera Sci Desktop (Etapa 1)"
+  "notes": "Vespera Sci Alpha — Redesign moderno completo, Dark/Light Mode, ícones vetoriais SVG e correção de alinhamentos"
 }

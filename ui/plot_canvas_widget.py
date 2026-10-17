@@ -1,9 +1,8 @@
 """
-Widget de visualização gráfica interativa (Matplotlib FigureCanvasQTAgg + NavigationToolbar)
-com suporte a arraste de legenda pelo mouse e exportação em PNG (300 DPI), PDF Vetorial e Excel (.xlsx).
+Widget de visualização gráfica interativa (Matplotlib FigureCanvasQTAgg + NavigationToolbar).
+Repaginação visual completa: ícones vetoriais SVG, sem emojis e botões de exportação destacados.
 """
 
-import io
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolbar2QT
 from matplotlib.figure import Figure
 from PySide6.QtCore import Qt, Signal
@@ -19,6 +18,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ui.icons import get_icon
+
 
 class PlotCanvasWidget(QWidget):
     """Área direita da aplicação contendo o gráfico Matplotlib interativo e botões de exportação."""
@@ -31,7 +32,7 @@ class PlotCanvasWidget(QWidget):
         self._updating_ui = False
         self.tipo_grafico = "linhas"
 
-        self.fig = Figure(figsize=(7.2, 4.5), dpi=125)
+        self.fig = Figure(figsize=(7.5, 4.8), dpi=125)
         self.canvas = FigureCanvasQTAgg(self.fig)
         self.toolbar = NavigationToolbar2QT(self.canvas, self)
 
@@ -42,18 +43,14 @@ class PlotCanvasWidget(QWidget):
         layout.setContentsMargins(6, 6, 6, 6)
         layout.setSpacing(8)
 
-        # Título da seção
-        lbl_titulo = QLabel("<b>Visualização Gráfica Interativa (Padrão OriginLab Pro)</b>")
-        lbl_titulo.setStyleSheet("font-size: 14px;")
-        layout.addWidget(lbl_titulo)
-
-        # Barra de séries visíveis
+        # 1. Barra de Séries Visíveis
         self.frame_series = QFrame()
-        self.frame_series.setFrameShape(QFrame.StyledPanel)
+        self.frame_series.setObjectName("cardPanel")
         series_layout = QHBoxLayout(self.frame_series)
-        series_layout.setContentsMargins(10, 6, 10, 6)
+        series_layout.setContentsMargins(12, 8, 12, 8)
+        series_layout.setSpacing(12)
 
-        lbl_vis = QLabel("<b>Séries visíveis:</b>")
+        lbl_vis = QLabel("<b>Séries no Gráfico:</b>")
         series_layout.addWidget(lbl_vis)
 
         # Checkboxes modo linhas
@@ -62,6 +59,7 @@ class PlotCanvasWidget(QWidget):
         self.chk_noite = QCheckBox("Noite")
         for chk in (self.chk_manha, self.chk_tarde, self.chk_noite):
             chk.setChecked(True)
+            chk.setCursor(Qt.PointingHandCursor)
             chk.toggled.connect(self._on_series_toggled)
             series_layout.addWidget(chk)
 
@@ -73,48 +71,64 @@ class PlotCanvasWidget(QWidget):
         for chk in (self.chk_bosque, self.chk_desvio_bosque, self.chk_estac, self.chk_desvio_estac):
             chk.setChecked(True)
             chk.setVisible(False)
+            chk.setCursor(Qt.PointingHandCursor)
             chk.toggled.connect(self._on_series_toggled)
             series_layout.addWidget(chk)
 
         series_layout.addStretch()
         layout.addWidget(self.frame_series)
 
-        # Dica de interatividade da legenda
+        # 2. Dica de Interatividade
+        dica_frame = QFrame()
+        dica_frame.setObjectName("cardPanel")
+        df_layout = QHBoxLayout(dica_frame)
+        df_layout.setContentsMargins(10, 6, 10, 6)
         lbl_dica = QLabel(
-            "💡 <i>Dica: Clique e arraste a <b>legenda</b> diretamente com o mouse sobre o gráfico "
-            "para posicioná-la livremente, ou use a barra abaixo para dar zoom/pan.</i>"
+            "<b>Interatividade:</b> Clique e arraste a legenda com o mouse para reposicioná-la livremente. "
+            "Use a barra inferior para zoom e pan."
         )
-        lbl_dica.setWordWrap(True)
-        lbl_dica.setStyleSheet("color: #555555; font-size: 11.5px; padding: 2px 4px;")
-        layout.addWidget(lbl_dica)
+        lbl_dica.setStyleSheet("color: #64748b; font-size: 11.5px;")
+        df_layout.addWidget(lbl_dica)
+        layout.addWidget(dica_frame)
 
-        # Barra de navegação nativa do Matplotlib
-        layout.addWidget(self.toolbar)
+        # 3. Canvas Principal em Card Moderno
+        canvas_card = QFrame()
+        canvas_card.setObjectName("cardPanel")
+        cc_layout = QVBoxLayout(canvas_card)
+        cc_layout.setContentsMargins(4, 4, 4, 4)
+        cc_layout.setSpacing(4)
 
-        # Canvas principal do gráfico
         self.canvas.setMinimumSize(480, 360)
-        layout.addWidget(self.canvas, stretch=1)
+        cc_layout.addWidget(self.canvas, stretch=1)
+        cc_layout.addWidget(self.toolbar)
 
-        # Barra inferior de Exportação Rápida
+        layout.addWidget(canvas_card, stretch=1)
+
+        # 4. Barra Inferior de Exportação com Ícones Vetoriais
         frame_exp = QFrame()
-        frame_exp.setFrameShape(QFrame.StyledPanel)
+        frame_exp.setObjectName("cardPanel")
         exp_layout = QHBoxLayout(frame_exp)
-        exp_layout.setContentsMargins(10, 8, 10, 8)
+        exp_layout.setContentsMargins(12, 10, 12, 10)
         exp_layout.setSpacing(10)
 
-        self.btn_png = QPushButton("🖼️ Exportar PNG (300 DPI)")
+        self.btn_png = QPushButton("Exportar PNG (300 DPI)")
+        self.btn_png.setIcon(get_icon("file-image", color="#ffffff", size=16))
+        self.btn_png.setObjectName("btnPrimary")
         self.btn_png.setCursor(Qt.PointingHandCursor)
-        self.btn_png.setMinimumHeight(34)
+        self.btn_png.setMinimumHeight(36)
         self.btn_png.clicked.connect(self._exportar_png)
 
-        self.btn_pdf = QPushButton("📄 Exportar Vetor PDF (Publicação)")
+        self.btn_pdf = QPushButton("Vetor PDF (Publicação)")
+        self.btn_pdf.setIcon(get_icon("file-pdf", color="#ffffff", size=16))
+        self.btn_pdf.setObjectName("btnSuccess")
         self.btn_pdf.setCursor(Qt.PointingHandCursor)
-        self.btn_pdf.setMinimumHeight(34)
+        self.btn_pdf.setMinimumHeight(36)
         self.btn_pdf.clicked.connect(self._exportar_pdf)
 
-        self.btn_excel = QPushButton("📊 Exportar Planilha Excel (.xlsx)")
+        self.btn_excel = QPushButton("Planilha Excel (.xlsx)")
+        self.btn_excel.setIcon(get_icon("file-spreadsheet", size=16))
         self.btn_excel.setCursor(Qt.PointingHandCursor)
-        self.btn_excel.setMinimumHeight(34)
+        self.btn_excel.setMinimumHeight(36)
         self.btn_excel.clicked.connect(self._solicitar_exportacao_excel)
 
         exp_layout.addWidget(self.btn_png)
@@ -210,7 +224,7 @@ class PlotCanvasWidget(QWidget):
         if caminho:
             try:
                 self.fig.savefig(caminho, format="png", dpi=300, bbox_inches="tight")
-                QMessageBox.information(self, "Exportação Concluída", f"Imagem PNG (300 DPI) salva em:\n{caminho}")
+                QMessageBox.information(self, "Exportação Concluída", f"Imagem PNG (300 DPI) salva com sucesso em:\n{caminho}")
             except Exception as e:
                 QMessageBox.critical(self, "Erro ao Exportar PNG", str(e))
 
@@ -224,7 +238,7 @@ class PlotCanvasWidget(QWidget):
         if caminho:
             try:
                 self.fig.savefig(caminho, format="pdf", bbox_inches="tight")
-                QMessageBox.information(self, "Exportação Concluída", f"Arquivo PDF vetorial salvo em:\n{caminho}")
+                QMessageBox.information(self, "Exportação Concluída", f"Arquivo PDF vetorial salvo com sucesso em:\n{caminho}")
             except Exception as e:
                 QMessageBox.critical(self, "Erro ao Exportar PDF", str(e))
 

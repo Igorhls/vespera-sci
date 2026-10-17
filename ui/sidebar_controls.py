@@ -1,15 +1,17 @@
 """
 Painel lateral de configurações estéticas e controles estilo OriginLab Pro para o Vespera Sci.
+Reorganizado em abas temáticas com ícones vetoriais SVG, sem emojis e sem cortes horizontais.
 """
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QColorDialog,
     QComboBox,
     QDoubleSpinBox,
     QFormLayout,
+    QFrame,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
@@ -17,6 +19,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QRadioButton,
     QScrollArea,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -30,10 +33,11 @@ from config.themes import (
     PALETAS_LINHAS,
     POSICOES_LEGENDA,
 )
+from ui.icons import get_icon
 
 
 class ColorButton(QPushButton):
-    """Botão seletor de cor que exibe a cor atual no fundo e abre QColorDialog ao clicar."""
+    """Botão seletor de cor com indicador visual circular e tooltip informativo."""
 
     colorChanged = Signal(str)
 
@@ -42,6 +46,7 @@ class ColorButton(QPushButton):
         self._label_prefix = label_prefix
         self._hex_color = hex_color
         self.setCursor(Qt.PointingHandCursor)
+        self.setMinimumHeight(30)
         self.clicked.connect(self._pick_color)
         self._update_appearance()
 
@@ -53,18 +58,30 @@ class ColorButton(QPushButton):
         return self._hex_color
 
     def _update_appearance(self):
-        c = QColor(self._hex_color)
-        luminance = 0.299 * c.red() + 0.587 * c.green() + 0.114 * c.blue()
-        text_color = "#000000" if luminance > 140 else "#ffffff"
-        texto = f"{self._label_prefix}: {self._hex_color}" if self._label_prefix else self._hex_color
-        self.setText(texto)
-        self.setStyleSheet(
-            f"background-color: {self._hex_color}; color: {text_color}; "
-            "border: 1px solid #666666; border-radius: 4px; padding: 4px 6px; font-weight: 600;"
-        )
+        pixmap = QPixmap(14, 14)
+        pixmap.fill(Qt.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setBrush(QColor(self._hex_color))
+        painter.setPen(QColor("#64748b"))
+        painter.drawEllipse(1, 1, 12, 12)
+        painter.end()
+
+        self.setIcon(QIcon(pixmap))
+        texto = f"{self._label_prefix}" if self._label_prefix else self._hex_color
+        self.setText(f"  {texto}")
+        self.setToolTip(f"{texto}: {self._hex_color} (Clique para alterar)")
+        self.setStyleSheet("""
+            QPushButton {
+                text-align: left;
+                padding-left: 8px;
+                font-weight: 600;
+                border-radius: 6px;
+            }
+        """)
 
     def _pick_color(self):
-        cor = QColorDialog.getColor(QColor(self._hex_color), self, "Selecionar Cor")
+        cor = QColorDialog.getColor(QColor(self._hex_color), self, f"Selecionar Cor — {self._label_prefix}")
         if cor.isValid():
             self._hex_color = cor.name()
             self._update_appearance()
@@ -72,7 +89,7 @@ class ColorButton(QPushButton):
 
 
 class SidebarControlsWidget(QScrollArea):
-    """Barra lateral rolável com todas as opções de configuração e estilo do gráfico."""
+    """Barra lateral rolável dividida em abas de estilo profissional."""
 
     configChanged = Signal()
     modeChangeRequested = Signal(str)
@@ -85,9 +102,8 @@ class SidebarControlsWidget(QScrollArea):
         self._updating_ui = False
         self.tipo_grafico = "linhas"
         self.setWidgetResizable(True)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.setMinimumWidth(310)
-        self.setMaximumWidth(370)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.setMinimumWidth(260)
 
         self.container = QWidget()
         self.setWidget(self.container)
@@ -96,151 +112,132 @@ class SidebarControlsWidget(QScrollArea):
     def _build_ui(self):
         main_layout = QVBoxLayout(self.container)
         main_layout.setContentsMargins(8, 8, 8, 8)
-        main_layout.setSpacing(10)
+        main_layout.setSpacing(8)
 
         # -------------------------------------------------------------------
-        # 1. Modo de Análise
+        # 1. Card Superior: Modelos Rápidos e Importação (Layout Vertical sem cortes)
         # -------------------------------------------------------------------
-        grp_modo = QGroupBox("Modo de Gráfico")
-        modo_layout = QVBoxLayout(grp_modo)
-        self.rb_linhas = QRadioButton("📈 Temperaturas por Ponto (Linhas P1–Pn)")
-        self.rb_barras = QRadioButton("📊 Média e Desvio Padrão (Barras Agrupadas)")
-        self.rb_linhas.setChecked(True)
-        self.rb_linhas.toggled.connect(self._on_modo_toggled)
-        modo_layout.addWidget(self.rb_linhas)
-        modo_layout.addWidget(self.rb_barras)
-        main_layout.addWidget(grp_modo)
+        top_card = QFrame()
+        top_card.setObjectName("cardPanel")
+        tc_layout = QVBoxLayout(top_card)
+        tc_layout.setContentsMargins(10, 10, 10, 10)
+        tc_layout.setSpacing(8)
 
-        # -------------------------------------------------------------------
-        # 2. Origem dos Dados / Modelos Pré-Cadastrados
-        # -------------------------------------------------------------------
-        grp_dados = QGroupBox("Origem dos Dados / Modelos")
-        dados_layout = QVBoxLayout(grp_dados)
+        lbl_presets = QLabel("<b>Modelos e Presets</b>")
+        tc_layout.addWidget(lbl_presets)
 
         self.cmb_presets = QComboBox()
         opcoes_preset = (
             ["Carregar modelo pré-cadastrado..."]
-            + list(PRESETS_BARRAS.keys())
             + list(PRESETS_LINHAS.keys())
-            + ["Criar Novo — Barras (Média e Desvio)", "Criar Novo — Linhas (Pontos P1–P10)"]
+            + list(PRESETS_BARRAS.keys())
+            + ["Criar Novo — Linhas (Pontos P1–P10)", "Criar Novo — Barras (Média e Desvio)"]
         )
         self.cmb_presets.addItems(opcoes_preset)
         self.cmb_presets.currentIndexChanged.connect(self._on_preset_chosen)
-        dados_layout.addWidget(self.cmb_presets)
+        tc_layout.addWidget(self.cmb_presets)
 
-        btn_imp_xlsx = QPushButton("📂 Importar Planilha (.xlsx / .csv)")
+        vl_imp = QVBoxLayout()
+        vl_imp.setSpacing(6)
+
+        btn_imp_xlsx = QPushButton("Importar Planilha (.xlsx / .csv)")
+        btn_imp_xlsx.setIcon(get_icon("file-spreadsheet", size=16))
         btn_imp_xlsx.setCursor(Qt.PointingHandCursor)
         btn_imp_xlsx.clicked.connect(self.importSpreadsheetRequested.emit)
 
-        btn_imp_json = QPushButton("📂 Importar Projeto (.json / .vespera)")
+        btn_imp_json = QPushButton("Abrir Projeto (.json / .vespera)")
+        btn_imp_json.setIcon(get_icon("folder", size=16))
         btn_imp_json.setCursor(Qt.PointingHandCursor)
         btn_imp_json.clicked.connect(self.importProjectFileRequested.emit)
 
-        dados_layout.addWidget(btn_imp_xlsx)
-        dados_layout.addWidget(btn_imp_json)
-        main_layout.addWidget(grp_dados)
+        vl_imp.addWidget(btn_imp_xlsx)
+        vl_imp.addWidget(btn_imp_json)
+        tc_layout.addLayout(vl_imp)
+
+        # Radio buttons ocultos para manter compatibilidade legada
+        self.rb_linhas = QRadioButton("Linhas")
+        self.rb_barras = QRadioButton("Barras")
+        self.rb_linhas.setChecked(True)
+        self.rb_linhas.toggled.connect(self._on_modo_toggled)
+
+        main_layout.addWidget(top_card)
 
         # -------------------------------------------------------------------
-        # 3. Tipografia Acadêmica
+        # 2. Abas de Customização Estética com Ícones Vetoriais
         # -------------------------------------------------------------------
-        grp_font = QGroupBox("Tipografia Acadêmica")
-        font_form = QFormLayout(grp_font)
+        self.tab_estilos = QTabWidget()
+        main_layout.addWidget(self.tab_estilos, stretch=1)
+
+        # ABA 1: Tipografia & Traço
+        tab_estilo = QWidget()
+        l_estilo = QVBoxLayout(tab_estilo)
+        l_estilo.setContentsMargins(6, 8, 6, 8)
+        l_estilo.setSpacing(10)
+
+        grp_font = QGroupBox("Tipografia Acadêmica (ABNT / OriginLab)")
+        form_font = QFormLayout(grp_font)
+        form_font.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        form_font.setLabelAlignment(Qt.AlignLeft)
+        form_font.setHorizontalSpacing(8)
+        form_font.setVerticalSpacing(8)
+
         self.cmb_fonte = QComboBox()
         self.cmb_fonte.addItems(FONTES_DISPONIVEIS)
         self.cmb_fonte.currentIndexChanged.connect(self._emit_change)
 
         self.spn_tam_fonte = QDoubleSpinBox()
-        self.spn_tam_fonte.setRange(8.0, 16.0)
+        self.spn_tam_fonte.setRange(8.0, 18.0)
         self.spn_tam_fonte.setSingleStep(0.5)
         self.spn_tam_fonte.setValue(11.0)
         self.spn_tam_fonte.valueChanged.connect(self._emit_change)
 
-        font_form.addRow("Família de Fonte:", self.cmb_fonte)
-        font_form.addRow("Tamanho (pt):", self.spn_tam_fonte)
-        main_layout.addWidget(grp_font)
+        form_font.addRow("Família:", self.cmb_fonte)
+        form_font.addRow("Tamanho (pt):", self.spn_tam_fonte)
+        l_estilo.addWidget(grp_font)
 
-        # -------------------------------------------------------------------
-        # 4. Cores das Séries (Linhas e Barras)
-        # -------------------------------------------------------------------
-        self.grp_cores_linhas = QGroupBox("Cores das Séries (Linhas)")
-        cl_layout = QVBoxLayout(self.grp_cores_linhas)
-        self.cmb_paleta_linhas = QComboBox()
-        self.cmb_paleta_linhas.addItems(list(PALETAS_LINHAS.keys()) + ["Personalizada (Definir manualmente)"])
-        self.cmb_paleta_linhas.currentIndexChanged.connect(self._on_paleta_linhas_changed)
-        cl_layout.addWidget(self.cmb_paleta_linhas)
-
-        self.widget_cores_linhas_custom = QWidget()
-        hl_cl_custom = QHBoxLayout(self.widget_cores_linhas_custom)
-        hl_cl_custom.setContentsMargins(0, 4, 0, 0)
-        self.btn_cor_manha = ColorButton("#222222", "Manhã")
-        self.btn_cor_tarde = ColorButton("#e74c3c", "Tarde")
-        self.btn_cor_noite = ColorButton("#2980b9", "Noite")
-        for b in (self.btn_cor_manha, self.btn_cor_tarde, self.btn_cor_noite):
-            b.colorChanged.connect(self._emit_change)
-            hl_cl_custom.addWidget(b)
-        self.widget_cores_linhas_custom.setVisible(False)
-        cl_layout.addWidget(self.widget_cores_linhas_custom)
-        main_layout.addWidget(self.grp_cores_linhas)
-
-        self.grp_cores_barras = QGroupBox("Cores das Séries (Barras)")
-        cb_layout = QVBoxLayout(self.grp_cores_barras)
-        self.cmb_paleta_barras = QComboBox()
-        self.cmb_paleta_barras.addItems(list(PALETAS_BARRAS.keys()) + ["Personalizada (Definir manualmente)"])
-        self.cmb_paleta_barras.currentIndexChanged.connect(self._on_paleta_barras_changed)
-        cb_layout.addWidget(self.cmb_paleta_barras)
-
-        self.widget_cores_barras_custom = QWidget()
-        grid_cb_custom = QGridLayout(self.widget_cores_barras_custom)
-        grid_cb_custom.setContentsMargins(0, 4, 0, 0)
-        self.btn_cor_bosque = ColorButton("#fdc086", "Bosque")
-        self.btn_cor_db = ColorButton("#8fd194", "Desv. Bosque")
-        self.btn_cor_estac = ColorButton("#c2b2d6", "Estac.")
-        self.btn_cor_de = ColorButton("#ffff99", "Desv. Estac.")
-        for b in (self.btn_cor_bosque, self.btn_cor_db, self.btn_cor_estac, self.btn_cor_de):
-            b.colorChanged.connect(self._emit_change)
-        grid_cb_custom.addWidget(self.btn_cor_bosque, 0, 0)
-        grid_cb_custom.addWidget(self.btn_cor_db, 0, 1)
-        grid_cb_custom.addWidget(self.btn_cor_estac, 1, 0)
-        grid_cb_custom.addWidget(self.btn_cor_de, 1, 1)
-        self.widget_cores_barras_custom.setVisible(False)
-        cb_layout.addWidget(self.widget_cores_barras_custom)
-        self.grp_cores_barras.setVisible(False)
-        main_layout.addWidget(self.grp_cores_barras)
-
-        # -------------------------------------------------------------------
-        # 5. Opções de Traços (Linhas) ou Rótulos (Barras)
-        # -------------------------------------------------------------------
+        # Opções Linhas
         self.grp_opcoes_linhas = QGroupBox("Traços e Marcadores (Linhas)")
         ol_layout = QVBoxLayout(self.grp_opcoes_linhas)
-        fl_esp = QFormLayout()
+        ol_layout.setSpacing(6)
+
+        form_traco = QFormLayout()
+        form_traco.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        form_traco.setLabelAlignment(Qt.AlignLeft)
+        form_traco.setHorizontalSpacing(8)
         self.spn_esp_linha = QDoubleSpinBox()
-        self.spn_esp_linha.setRange(0.5, 4.0)
+        self.spn_esp_linha.setRange(0.5, 5.0)
         self.spn_esp_linha.setSingleStep(0.1)
         self.spn_esp_linha.setValue(1.2)
         self.spn_esp_linha.valueChanged.connect(self._emit_change)
-        fl_esp.addRow("Espessura do Traço (pt):", self.spn_esp_linha)
-        ol_layout.addLayout(fl_esp)
+        form_traco.addRow("Espessura (pt):", self.spn_esp_linha)
+        ol_layout.addLayout(form_traco)
 
         self.chk_marcadores = QCheckBox("Exibir marcadores geométricos nos pontos")
-        self.chk_linhas_distintas = QCheckBox("Linhas distintas (Sólido / Tracejado / Pontilhado)")
-        self.chk_grade = QCheckBox("Exibir linhas de grade")
-        for chk in (self.chk_marcadores, self.chk_linhas_distintas, self.chk_grade):
+        self.chk_linhas_distintas = QCheckBox("Traços distintos (Sólido / Tracejado / Pontilhado)")
+        for chk in (self.chk_marcadores, self.chk_linhas_distintas):
             chk.toggled.connect(self._emit_change)
             ol_layout.addWidget(chk)
-        main_layout.addWidget(self.grp_opcoes_linhas)
+        l_estilo.addWidget(self.grp_opcoes_linhas)
 
-        self.grp_opcoes_barras = QGroupBox("Opções das Barras e Rótulos")
+        # Opções Barras
+        self.grp_opcoes_barras = QGroupBox("Opções de Barras e Rótulos")
         ob_layout = QVBoxLayout(self.grp_opcoes_barras)
-        self.chk_exibir_valores_barras = QCheckBox("Exibir valores no topo das barras")
+        ob_layout.setSpacing(6)
+
+        self.chk_exibir_valores_barras = QCheckBox("Exibir valores sobre as barras")
         self.chk_exibir_valores_barras.setChecked(True)
-        self.chk_negrito_barras = QCheckBox("Valores em negrito")
+        self.chk_negrito_barras = QCheckBox("Valores das barras em negrito")
         self.chk_negrito_barras.setChecked(True)
-        self.chk_grade_barras = QCheckBox("Linhas de grade horizontais")
-        for chk in (self.chk_exibir_valores_barras, self.chk_negrito_barras, self.chk_grade_barras):
+        for chk in (self.chk_exibir_valores_barras, self.chk_negrito_barras):
             chk.toggled.connect(self._emit_change)
             ob_layout.addWidget(chk)
 
-        fl_ob = QFormLayout()
+        form_barras = QFormLayout()
+        form_barras.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        form_barras.setLabelAlignment(Qt.AlignLeft)
+        form_barras.setHorizontalSpacing(8)
+        form_barras.setVerticalSpacing(6)
+
         self.cmb_fmt_decimais = QComboBox()
         self.cmb_fmt_decimais.addItems([
             "Automático (ex: 27,32 | 2,3)",
@@ -249,31 +246,114 @@ class SidebarControlsWidget(QScrollArea):
         self.cmb_fmt_decimais.currentIndexChanged.connect(self._emit_change)
 
         self.spn_largura_grupo = QDoubleSpinBox()
-        self.spn_largura_grupo.setRange(0.40, 0.90)
+        self.spn_largura_grupo.setRange(0.30, 0.95)
         self.spn_largura_grupo.setSingleStep(0.02)
         self.spn_largura_grupo.setValue(0.68)
         self.spn_largura_grupo.valueChanged.connect(self._emit_change)
 
-        fl_ob.addRow("Formato decimal:", self.cmb_fmt_decimais)
-        fl_ob.addRow("Largura do grupo:", self.spn_largura_grupo)
-        ob_layout.addLayout(fl_ob)
+        form_barras.addRow("Formato:", self.cmb_fmt_decimais)
+        form_barras.addRow("Largura:", self.spn_largura_grupo)
+        ob_layout.addLayout(form_barras)
         self.grp_opcoes_barras.setVisible(False)
-        main_layout.addWidget(self.grp_opcoes_barras)
+        l_estilo.addWidget(self.grp_opcoes_barras)
 
-        # -------------------------------------------------------------------
-        # 6. Posicionamento e Estilo da Legenda
-        # -------------------------------------------------------------------
-        grp_leg = QGroupBox("📍 Legenda (Posição e Moldura)")
-        leg_layout = QVBoxLayout(grp_leg)
-        self.chk_exibir_leg = QCheckBox("Exibir legenda")
+        l_estilo.addStretch()
+        self.tab_estilos.addTab(tab_estilo, get_icon("type", size=15), "Estilo")
+
+        # ABA 2: Eixos & Quadro
+        tab_eixos = QWidget()
+        l_eixos = QVBoxLayout(tab_eixos)
+        l_eixos.setContentsMargins(6, 8, 6, 8)
+        l_eixos.setSpacing(10)
+
+        grp_bordas = QGroupBox("Bordas do Quadro")
+        grid_b = QGridLayout(grp_bordas)
+        grid_b.setHorizontalSpacing(8)
+        grid_b.setVerticalSpacing(6)
+        self.chk_b_top = QCheckBox("Superior")
+        self.chk_b_bot = QCheckBox("Inferior")
+        self.chk_b_left = QCheckBox("Esquerda")
+        self.chk_b_right = QCheckBox("Direita")
+        for idx, chk in enumerate((self.chk_b_top, self.chk_b_bot, self.chk_b_left, self.chk_b_right)):
+            chk.setChecked(True)
+            chk.toggled.connect(self._emit_change)
+            grid_b.addWidget(chk, idx // 2, idx % 2)
+        l_eixos.addWidget(grp_bordas)
+
+        grp_ticks = QGroupBox("Traços de Escala (Ticks)")
+        l_gticks = QVBoxLayout(grp_ticks)
+        l_gticks.setSpacing(6)
+
+        grid_t = QGridLayout()
+        grid_t.setHorizontalSpacing(8)
+        grid_t.setVerticalSpacing(6)
+        self.chk_t_top = QCheckBox("Topo")
+        self.chk_t_bot = QCheckBox("Base")
+        self.chk_t_left = QCheckBox("Esquerda")
+        self.chk_t_right = QCheckBox("Direita")
+        for idx, chk in enumerate((self.chk_t_top, self.chk_t_bot, self.chk_t_left, self.chk_t_right)):
+            chk.setChecked(True)
+            chk.toggled.connect(self._emit_change)
+            grid_t.addWidget(chk, idx // 2, idx % 2)
+        l_gticks.addLayout(grid_t)
+
+        self.chk_minor_ticks = QCheckBox("Exibir subtraços (Minor Ticks)")
+        self.chk_minor_ticks.setChecked(True)
+        self.chk_minor_ticks.toggled.connect(self._emit_change)
+        l_gticks.addWidget(self.chk_minor_ticks)
+
+        form_ticks = QFormLayout()
+        form_ticks.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        form_ticks.setLabelAlignment(Qt.AlignLeft)
+        form_ticks.setHorizontalSpacing(8)
+        form_ticks.setVerticalSpacing(6)
+
+        self.cmb_dir_ticks = QComboBox()
+        self.cmb_dir_ticks.addItems(["Para dentro (in)", "Para fora (out)"])
+        self.cmb_dir_ticks.currentIndexChanged.connect(self._emit_change)
+
+        self.spn_esp_moldura = QDoubleSpinBox()
+        self.spn_esp_moldura.setRange(0.5, 4.0)
+        self.spn_esp_moldura.setSingleStep(0.05)
+        self.spn_esp_moldura.setValue(1.15)
+        self.spn_esp_moldura.valueChanged.connect(self._emit_change)
+
+        self.btn_cor_moldura = ColorButton("#000000", "Cor da Moldura")
+        self.btn_cor_moldura.colorChanged.connect(self._emit_change)
+
+        form_ticks.addRow("Direção:", self.cmb_dir_ticks)
+        form_ticks.addRow("Espessura:", self.spn_esp_moldura)
+        form_ticks.addRow("Cor:", self.btn_cor_moldura)
+        l_gticks.addLayout(form_ticks)
+        l_eixos.addWidget(grp_ticks)
+
+        l_eixos.addStretch()
+        self.tab_estilos.addTab(tab_eixos, get_icon("sliders", size=15), "Eixos")
+
+        # ABA 3: Legenda & Grade
+        tab_legenda = QWidget()
+        l_leg = QVBoxLayout(tab_legenda)
+        l_leg.setContentsMargins(6, 8, 6, 8)
+        l_leg.setSpacing(10)
+
+        grp_leg = QGroupBox("Configuração da Legenda")
+        l_gleg = QVBoxLayout(grp_leg)
+        l_gleg.setSpacing(6)
+
+        self.chk_exibir_leg = QCheckBox("Exibir legenda no gráfico")
         self.chk_exibir_leg.setChecked(True)
-        self.chk_moldura_leg = QCheckBox("Caixa de contorno na legenda (OriginLab)")
+        self.chk_moldura_leg = QCheckBox("Caixa de contorno na legenda")
         self.chk_moldura_leg.setChecked(True)
         for chk in (self.chk_exibir_leg, self.chk_moldura_leg):
             chk.toggled.connect(self._emit_change)
-            leg_layout.addWidget(chk)
+            l_gleg.addWidget(chk)
 
-        fl_leg = QFormLayout()
+        form_leg = QFormLayout()
+        form_leg.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        form_leg.setLabelAlignment(Qt.AlignLeft)
+        form_leg.setHorizontalSpacing(8)
+        form_leg.setVerticalSpacing(6)
+
         self.cmb_orient_leg = QComboBox()
         self.cmb_orient_leg.addItems(["Vertical (Empilhados)", "Horizontal (Lado a lado)"])
         self.cmb_orient_leg.currentIndexChanged.connect(self._emit_change)
@@ -283,80 +363,95 @@ class SidebarControlsWidget(QScrollArea):
         self.cmb_pos_preset.currentIndexChanged.connect(self._on_pos_preset_changed)
 
         self.spn_leg_x = QDoubleSpinBox()
-        self.spn_leg_x.setRange(-0.20, 1.30)
+        self.spn_leg_x.setRange(-0.50, 1.50)
         self.spn_leg_x.setSingleStep(0.02)
         self.spn_leg_x.setValue(0.98)
         self.spn_leg_x.valueChanged.connect(self._emit_change)
 
         self.spn_leg_y = QDoubleSpinBox()
-        self.spn_leg_y.setRange(-0.20, 1.35)
+        self.spn_leg_y.setRange(-0.50, 1.50)
         self.spn_leg_y.setSingleStep(0.02)
         self.spn_leg_y.setValue(0.98)
         self.spn_leg_y.valueChanged.connect(self._emit_change)
 
-        fl_leg.addRow("Orientação:", self.cmb_orient_leg)
-        fl_leg.addRow("Posição Rápida:", self.cmb_pos_preset)
-        fl_leg.addRow("Coordenada X:", self.spn_leg_x)
-        fl_leg.addRow("Coordenada Y:", self.spn_leg_y)
-        leg_layout.addLayout(fl_leg)
-        main_layout.addWidget(grp_leg)
+        form_leg.addRow("Orientação:", self.cmb_orient_leg)
+        form_leg.addRow("Posição:", self.cmb_pos_preset)
+        form_leg.addRow("Coord. X:", self.spn_leg_x)
+        form_leg.addRow("Coord. Y:", self.spn_leg_y)
+        l_gleg.addLayout(form_leg)
+        l_leg.addWidget(grp_leg)
 
-        # -------------------------------------------------------------------
-        # 7. Bordas da Caixa (Spines) e Ticks
-        # -------------------------------------------------------------------
-        grp_bordas = QGroupBox("📐 Bordas e Ticks do Quadro")
-        b_layout = QVBoxLayout(grp_bordas)
-
-        b_layout.addWidget(QLabel("<b>Bordas visíveis:</b>"))
-        grid_b = QGridLayout()
-        self.chk_b_top = QCheckBox("Superior")
-        self.chk_b_bot = QCheckBox("Inferior")
-        self.chk_b_left = QCheckBox("Esquerda")
-        self.chk_b_right = QCheckBox("Direita")
-        for idx, chk in enumerate((self.chk_b_top, self.chk_b_bot, self.chk_b_left, self.chk_b_right)):
-            chk.setChecked(True)
+        grp_grade = QGroupBox("Linhas de Grade")
+        l_grade = QVBoxLayout(grp_grade)
+        l_grade.setSpacing(6)
+        self.chk_grade = QCheckBox("Exibir grade de apoio (Linhas)")
+        self.chk_grade_barras = QCheckBox("Exibir grade horizontal (Barras)")
+        for chk in (self.chk_grade, self.chk_grade_barras):
             chk.toggled.connect(self._emit_change)
-            grid_b.addWidget(chk, idx // 2, idx % 2)
-        b_layout.addLayout(grid_b)
+            l_grade.addWidget(chk)
+        l_leg.addWidget(grp_grade)
 
-        b_layout.addWidget(QLabel("<b>Traços de escala (Ticks):</b>"))
-        grid_t = QGridLayout()
-        self.chk_t_top = QCheckBox("Ticks Topo")
-        self.chk_t_bot = QCheckBox("Ticks Base")
-        self.chk_t_left = QCheckBox("Ticks Esquerda")
-        self.chk_t_right = QCheckBox("Ticks Direita")
-        for idx, chk in enumerate((self.chk_t_top, self.chk_t_bot, self.chk_t_left, self.chk_t_right)):
-            chk.setChecked(True)
-            chk.toggled.connect(self._emit_change)
-            grid_t.addWidget(chk, idx // 2, idx % 2)
-        b_layout.addLayout(grid_t)
+        l_leg.addStretch()
+        self.tab_estilos.addTab(tab_legenda, get_icon("tag", size=15), "Legenda")
 
-        self.chk_minor_ticks = QCheckBox("Traços menores (Minor Ticks)")
-        self.chk_minor_ticks.setChecked(True)
-        self.chk_minor_ticks.toggled.connect(self._emit_change)
-        b_layout.addWidget(self.chk_minor_ticks)
+        # ABA 4: Cores & Paletas
+        tab_cores = QWidget()
+        l_cores = QVBoxLayout(tab_cores)
+        l_cores.setContentsMargins(6, 8, 6, 8)
+        l_cores.setSpacing(10)
 
-        fl_b = QFormLayout()
-        self.cmb_dir_ticks = QComboBox()
-        self.cmb_dir_ticks.addItems(["Para dentro (in)", "Para fora (out)"])
-        self.cmb_dir_ticks.currentIndexChanged.connect(self._emit_change)
+        # Paleta Linhas
+        self.grp_cores_linhas = QGroupBox("Paleta de Cores — Linhas")
+        cl_layout = QVBoxLayout(self.grp_cores_linhas)
+        cl_layout.setSpacing(6)
 
-        self.btn_cor_moldura = ColorButton("#000000", "Cor Borda")
-        self.btn_cor_moldura.colorChanged.connect(self._emit_change)
+        self.cmb_paleta_linhas = QComboBox()
+        self.cmb_paleta_linhas.addItems(list(PALETAS_LINHAS.keys()) + ["Personalizada (Definir manualmente)"])
+        self.cmb_paleta_linhas.currentIndexChanged.connect(self._on_paleta_linhas_changed)
+        cl_layout.addWidget(self.cmb_paleta_linhas)
 
-        self.spn_esp_moldura = QDoubleSpinBox()
-        self.spn_esp_moldura.setRange(0.5, 3.0)
-        self.spn_esp_moldura.setSingleStep(0.05)
-        self.spn_esp_moldura.setValue(1.15)
-        self.spn_esp_moldura.valueChanged.connect(self._emit_change)
+        self.widget_cores_linhas_custom = QWidget()
+        vl_cl_custom = QVBoxLayout(self.widget_cores_linhas_custom)
+        vl_cl_custom.setContentsMargins(0, 4, 0, 0)
+        vl_cl_custom.setSpacing(6)
+        self.btn_cor_manha = ColorButton("#222222", "Manhã")
+        self.btn_cor_tarde = ColorButton("#e74c3c", "Tarde")
+        self.btn_cor_noite = ColorButton("#2980b9", "Noite")
+        for b in (self.btn_cor_manha, self.btn_cor_tarde, self.btn_cor_noite):
+            b.colorChanged.connect(self._emit_change)
+            vl_cl_custom.addWidget(b)
+        self.widget_cores_linhas_custom.setVisible(False)
+        cl_layout.addWidget(self.widget_cores_linhas_custom)
+        l_cores.addWidget(self.grp_cores_linhas)
 
-        fl_b.addRow("Direção Ticks:", self.cmb_dir_ticks)
-        fl_b.addRow("Cor da Moldura:", self.btn_cor_moldura)
-        fl_b.addRow("Espessura (pt):", self.spn_esp_moldura)
-        b_layout.addLayout(fl_b)
-        main_layout.addWidget(grp_bordas)
+        # Paleta Barras
+        self.grp_cores_barras = QGroupBox("Paleta de Cores — Barras")
+        cb_layout = QVBoxLayout(self.grp_cores_barras)
+        cb_layout.setSpacing(6)
 
-        main_layout.addStretch()
+        self.cmb_paleta_barras = QComboBox()
+        self.cmb_paleta_barras.addItems(list(PALETAS_BARRAS.keys()) + ["Personalizada (Definir manualmente)"])
+        self.cmb_paleta_barras.currentIndexChanged.connect(self._on_paleta_barras_changed)
+        cb_layout.addWidget(self.cmb_paleta_barras)
+
+        self.widget_cores_barras_custom = QWidget()
+        vl_cb_custom = QVBoxLayout(self.widget_cores_barras_custom)
+        vl_cb_custom.setContentsMargins(0, 4, 0, 0)
+        vl_cb_custom.setSpacing(6)
+        self.btn_cor_bosque = ColorButton("#fdc086", "Bosque")
+        self.btn_cor_db = ColorButton("#8fd194", "Desvio Bosque")
+        self.btn_cor_estac = ColorButton("#c2b2d6", "Estacionamento")
+        self.btn_cor_de = ColorButton("#ffff99", "Desvio Estacionamento")
+        for b in (self.btn_cor_bosque, self.btn_cor_db, self.btn_cor_estac, self.btn_cor_de):
+            b.colorChanged.connect(self._emit_change)
+            vl_cb_custom.addWidget(b)
+        self.widget_cores_barras_custom.setVisible(False)
+        cb_layout.addWidget(self.widget_cores_barras_custom)
+        self.grp_cores_barras.setVisible(False)
+        l_cores.addWidget(self.grp_cores_barras)
+
+        l_cores.addStretch()
+        self.tab_estilos.addTab(tab_cores, get_icon("palette", size=15), "Cores")
 
     def configurar_modo(self, tipo_grafico: str):
         self._updating_ui = True
@@ -368,8 +463,11 @@ class SidebarControlsWidget(QScrollArea):
 
         self.grp_cores_linhas.setVisible(is_linhas)
         self.grp_opcoes_linhas.setVisible(is_linhas)
+        self.chk_grade.setVisible(is_linhas)
+
         self.grp_cores_barras.setVisible(not is_linhas)
         self.grp_opcoes_barras.setVisible(not is_linhas)
+        self.chk_grade_barras.setVisible(not is_linhas)
         self._updating_ui = False
 
     def carregar_config(self, cfg: dict, tipo_grafico: str = "linhas"):
@@ -404,7 +502,9 @@ class SidebarControlsWidget(QScrollArea):
 
         self.chk_exibir_valores_barras.setChecked(bool(cfg.get("exibir_valores_barras", True)))
         self.chk_negrito_barras.setChecked(bool(cfg.get("negrito_valores_barras", True)))
-        self._set_combo_text(self.cmb_fmt_decimais, cfg.get("formato_decimais_barras", DEFAULT_CONFIG["formato_decimais_barras"]))
+        self._set_combo_text(
+            self.cmb_fmt_decimais, cfg.get("formato_decimais_barras", DEFAULT_CONFIG["formato_decimais_barras"])
+        )
         self.spn_largura_grupo.setValue(float(cfg.get("largura_grupo_barras", 0.68)))
 
         self.chk_exibir_leg.setChecked(bool(cfg.get("exibir_legenda", True)))

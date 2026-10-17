@@ -1,7 +1,7 @@
 """
 Janela Principal (QMainWindow) do Vespera Sci Desktop.
-Integra a Barra de Gerenciamento de Projetos, Barra Lateral de Estilo,
-Editor Tabular de Dados e Canvas Interativo do Matplotlib.
+Repaginação visual completa: ícones vetoriais SVG nítidos, logotipo oficial Vespera Alpha,
+eliminação total de emojis e barras responsivas sem cortes horizontais.
 """
 
 import json
@@ -9,7 +9,7 @@ import os
 import numpy as np
 import pandas as pd
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtGui import QAction, QIcon, QKeySequence, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -32,8 +32,10 @@ from core.excel_exporter import gerar_excel_barras_bytes, gerar_excel_linhas_byt
 from core.plot_engine import renderizar_grafico_barras, renderizar_grafico_linhas
 from core.project_manager import ProjectManager
 from ui.data_table_widget import DataTableWidget
+from ui.icons import get_icon
 from ui.plot_canvas_widget import PlotCanvasWidget
 from ui.sidebar_controls import SidebarControlsWidget
+from ui.styles import THEME_DARK, THEME_LIGHT, build_qss
 
 
 class VesperaMainWindow(QMainWindow):
@@ -41,8 +43,13 @@ class VesperaMainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Vespera Sci — Scientific Plotting & Data Analysis Studio")
-        self.resize(1440, 880)
+        self.setWindowTitle("Vespera Sci Alpha — Scientific Plotting & Data Studio")
+        self.resize(1440, 900)
+
+        # Ícone oficial da janela e da barra de tarefas
+        icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "app_icon.png")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
 
         self.project_manager = ProjectManager()
         self.banco_projetos = self.project_manager.ler_banco()
@@ -51,81 +58,50 @@ class VesperaMainWindow(QMainWindow):
         self.nome_projeto_atual = "Dia 14 de agosto"
         self.cfg_atual = DEFAULT_CONFIG.copy()
         self._updating_project_combo = False
+        self.tema_atual = "light"
 
-        self._apply_stylesheet()
+        self._apply_theme()
         self._build_menu()
         self._build_ui()
         self._inicializar_sessao()
 
-    def _apply_stylesheet(self):
-        self.setStyleSheet("""
-            QMainWindow, QWidget {
-                font-family: "Segoe UI", -apple-system, Arial, sans-serif;
-                font-size: 12.5px;
-            }
-            QGroupBox {
-                font-weight: 600;
-                border: 1px solid #d0d5dd;
-                border-radius: 6px;
-                margin-top: 8px;
-                padding-top: 8px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 4px;
-            }
-            QPushButton {
-                border: 1px solid #c4c9d0;
-                border-radius: 5px;
-                padding: 5px 10px;
-                background-color: #f8f9fa;
-            }
-            QPushButton:hover {
-                background-color: #e9ecef;
-                border-color: #adb5bd;
-            }
-            QPushButton#btnPrimary {
-                background-color: #1f5f8b;
-                color: #ffffff;
-                border: 1px solid #164666;
-                font-weight: 600;
-            }
-            QPushButton#btnPrimary:hover {
-                background-color: #184b6e;
-            }
-            QPushButton#btnUpdate {
-                background-color: #216e39;
-                color: #ffffff;
-                border: 1px solid #19542b;
-                font-weight: 600;
-            }
-            QPushButton#btnUpdate:hover {
-                background-color: #19542b;
-            }
-            QLineEdit, QComboBox, QDoubleSpinBox, QPlainTextEdit {
-                border: 1px solid #ced4da;
-                border-radius: 4px;
-                padding: 4px 6px;
-                background-color: #ffffff;
-            }
-        """)
+    def _apply_theme(self):
+        tema = THEME_DARK if self.tema_atual == "dark" else THEME_LIGHT
+        self.setStyleSheet(build_qss(tema))
+
+    def _alternar_tema(self):
+        self.tema_atual = "dark" if self.tema_atual == "light" else "light"
+        self._apply_theme()
+        if self.tema_atual == "dark":
+            self.btn_toggle_theme.setText("Modo Claro")
+            self.btn_toggle_theme.setIcon(get_icon("sun", color="#fbbf24", size=16))
+        else:
+            self.btn_toggle_theme.setText("Modo Escuro")
+            self.btn_toggle_theme.setIcon(get_icon("moon", color="#6366f1", size=16))
+
+    def _alternar_sidebar(self):
+        visivel = self.sidebar.isVisible()
+        self.sidebar.setVisible(not visivel)
+        self.btn_toggle_sidebar.setText("Exibir Painel" if visivel else "Ocultar Painel")
 
     def _build_menu(self):
         menubar = self.menuBar()
 
         menu_arq = menubar.addMenu("&Arquivo")
 
-        act_salvar = QAction("💾 Salvar Projeto Atual", self)
+        act_salvar = QAction("Salvar Projeto Atual", self)
+        act_salvar.setIcon(get_icon("save", size=16))
         act_salvar.setShortcut(QKeySequence.Save)
         act_salvar.triggered.connect(self._salvar_projeto_atual)
         menu_arq.addAction(act_salvar)
 
-        act_imp_json = QAction("📂 Importar Projeto (.json / .vespera)...", self)
+        act_imp_json = QAction("Importar Projeto (.json / .vespera)...", self)
+        act_imp_json.setIcon(get_icon("folder", size=16))
         act_imp_json.triggered.connect(self._importar_arquivo_projeto)
         menu_arq.addAction(act_imp_json)
 
-        act_imp_xlsx = QAction("📊 Importar Planilha (.xlsx / .csv)...", self)
+        act_imp_xlsx = QAction("Importar Planilha (.xlsx / .csv)...", self)
+        act_imp_xlsx.setIcon(get_icon("file-spreadsheet", size=16))
         act_imp_xlsx.triggered.connect(self._importar_planilha)
         menu_arq.addAction(act_imp_xlsx)
 
@@ -136,81 +112,146 @@ class VesperaMainWindow(QMainWindow):
         act_sair.triggered.connect(self.close)
         menu_arq.addAction(act_sair)
 
+        menu_exibir = menubar.addMenu("&Exibir")
+        act_tema = QAction("Alternar Tema Claro / Escuro", self)
+        act_tema.setIcon(get_icon("moon", size=16))
+        act_tema.triggered.connect(self._alternar_tema)
+        menu_exibir.addAction(act_tema)
+
+        act_side = QAction("Alternar Barra Lateral", self)
+        act_side.setIcon(get_icon("sidebar", size=16))
+        act_side.triggered.connect(self._alternar_sidebar)
+        menu_exibir.addAction(act_side)
+
         menu_ajuda = menubar.addMenu("A&juda")
-        act_update = QAction("🔄 Verificar Atualizações no GitHub...", self)
+        act_update = QAction("Verificar Atualizações no GitHub...", self)
+        act_update.setIcon(get_icon("github", size=16))
         act_update.triggered.connect(self._acionar_verificacao_atualizacao)
         menu_ajuda.addAction(act_update)
 
-        act_sobre = QAction("ℹ️ Sobre o Vespera Sci", self)
+        act_sobre = QAction("Sobre o Vespera Sci Alpha", self)
+        act_sobre.setIcon(get_icon("app-icon", size=16))
         act_sobre.triggered.connect(self._mostrar_sobre)
         menu_ajuda.addAction(act_sobre)
 
     def _build_ui(self):
         central = QWidget()
+        central.setObjectName("centralWidget")
         self.setCentralWidget(central)
         root_layout = QVBoxLayout(central)
         root_layout.setContentsMargins(10, 8, 10, 8)
         root_layout.setSpacing(8)
 
         # -------------------------------------------------------------------
-        # 1. Cabeçalho Institucional + Botão de Auto-Update
+        # 1. Header Bar Unificado (Identidade Visual Alpha + Modos + Ações)
         # -------------------------------------------------------------------
-        header_layout = QHBoxLayout()
-        title_box = QVBoxLayout()
-        lbl_title = QLabel("🌌 <b>Vespera Sci</b> — Sistema de Análise Científica e Gráficos de Publicação")
-        lbl_title.setStyleSheet("font-size: 18px;")
-        lbl_sub = QLabel(
-            "Estúdio Desktop de Monitoramento Térmico, Estatística Descritiva e Figuras Padrão OriginLab Pro"
-        )
-        lbl_sub.setStyleSheet("color: #555555; font-size: 12px;")
-        title_box.addWidget(lbl_title)
-        title_box.addWidget(lbl_sub)
+        header_frame = QFrame()
+        header_frame.setObjectName("headerBar")
+        header_layout = QHBoxLayout(header_frame)
+        header_layout.setContentsMargins(10, 6, 10, 6)
+        header_layout.setSpacing(10)
 
-        header_layout.addLayout(title_box)
+        # Marca & Identidade Alpha
+        brand_widget = QWidget()
+        bw_layout = QHBoxLayout(brand_widget)
+        bw_layout.setContentsMargins(0, 0, 0, 0)
+        bw_layout.setSpacing(8)
+
+        icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "app_icon.png")
+        if os.path.exists(icon_path):
+            lbl_logo = QLabel()
+            pix = QPixmap(icon_path).scaled(24, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            lbl_logo.setPixmap(pix)
+            bw_layout.addWidget(lbl_logo)
+
+        lbl_brand = QLabel(
+            "<b>Vespera Sci</b> <span style='background-color: #3b82f6; color: white; "
+            "font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px;'>ALPHA</span>"
+        )
+        lbl_brand.setStyleSheet("font-size: 15px;")
+        bw_layout.addWidget(lbl_brand)
+        header_layout.addWidget(brand_widget)
+
         header_layout.addStretch()
 
-        self.btn_check_update = QPushButton("🔄 Verificar Atualizações (GitHub)")
-        self.btn_check_update.setObjectName("btnUpdate")
+        # Segmented Switcher para Linhas vs Barras
+        self.btn_modo_linhas = QPushButton("Linhas (Pontos P1–Pn)")
+        self.btn_modo_linhas.setIcon(get_icon("chart-line", size=16))
+        self.btn_modo_linhas.setObjectName("btnSegmentActive")
+        self.btn_modo_linhas.setCursor(Qt.PointingHandCursor)
+        self.btn_modo_linhas.clicked.connect(lambda: self._alternar_modo("linhas"))
+
+        self.btn_modo_barras = QPushButton("Barras (Média & Desvio)")
+        self.btn_modo_barras.setIcon(get_icon("chart-bar", size=16))
+        self.btn_modo_barras.setObjectName("btnSegment")
+        self.btn_modo_barras.setCursor(Qt.PointingHandCursor)
+        self.btn_modo_barras.clicked.connect(lambda: self._alternar_modo("barras"))
+
+        header_layout.addWidget(self.btn_modo_linhas)
+        header_layout.addWidget(self.btn_modo_barras)
+
+        header_layout.addStretch()
+
+        # Botão recolher barra lateral
+        self.btn_toggle_sidebar = QPushButton("Ocultar Painel")
+        self.btn_toggle_sidebar.setIcon(get_icon("sidebar", size=16))
+        self.btn_toggle_sidebar.setCursor(Qt.PointingHandCursor)
+        self.btn_toggle_sidebar.clicked.connect(self._alternar_sidebar)
+        header_layout.addWidget(self.btn_toggle_sidebar)
+
+        # Botão alternar tema Claro / Escuro
+        self.btn_toggle_theme = QPushButton("Modo Escuro")
+        self.btn_toggle_theme.setIcon(get_icon("moon", color="#6366f1", size=16))
+        self.btn_toggle_theme.setCursor(Qt.PointingHandCursor)
+        self.btn_toggle_theme.clicked.connect(self._alternar_tema)
+        header_layout.addWidget(self.btn_toggle_theme)
+
+        # Botão auto-update
+        self.btn_check_update = QPushButton("GitHub")
+        self.btn_check_update.setIcon(get_icon("github", size=16))
         self.btn_check_update.setCursor(Qt.PointingHandCursor)
-        self.btn_check_update.setMinimumHeight(34)
         self.btn_check_update.clicked.connect(self._acionar_verificacao_atualizacao)
         header_layout.addWidget(self.btn_check_update)
 
-        root_layout.addLayout(header_layout)
+        root_layout.addWidget(header_frame)
 
         # -------------------------------------------------------------------
-        # 2. Barra Superior de Salvamento e Gerenciamento de Projetos
+        # 2. Barra Superior de Gerenciamento de Projetos (Responsiva)
         # -------------------------------------------------------------------
         proj_frame = QFrame()
-        proj_frame.setFrameShape(QFrame.StyledPanel)
+        proj_frame.setObjectName("projBar")
         proj_layout = QHBoxLayout(proj_frame)
         proj_layout.setContentsMargins(10, 6, 10, 6)
         proj_layout.setSpacing(8)
 
-        proj_layout.addWidget(QLabel("📌 <b>Projeto:</b>"))
+        proj_layout.addWidget(QLabel("<b>Projeto:</b>"))
         self.txt_nome_projeto = QLineEdit()
-        self.txt_nome_projeto.setPlaceholderText("Ex: Dia 14 de Agosto - Bosque")
-        self.txt_nome_projeto.setMinimumWidth(210)
+        self.txt_nome_projeto.setPlaceholderText("Nome do projeto...")
+        self.txt_nome_projeto.setMinimumWidth(160)
         proj_layout.addWidget(self.txt_nome_projeto)
 
-        self.btn_salvar_proj = QPushButton("💾 Salvar Projeto (Ctrl+S)")
+        self.btn_salvar_proj = QPushButton("Salvar (Ctrl+S)")
+        self.btn_salvar_proj.setIcon(get_icon("save", color="#ffffff", size=16))
         self.btn_salvar_proj.setObjectName("btnPrimary")
         self.btn_salvar_proj.setCursor(Qt.PointingHandCursor)
         self.btn_salvar_proj.clicked.connect(self._salvar_projeto_atual)
         proj_layout.addWidget(self.btn_salvar_proj)
 
-        proj_layout.addWidget(QLabel("📂 <b>Salvos:</b>"))
+        proj_layout.addWidget(QLabel("<b>Salvos:</b>"))
         self.cmb_projetos_salvos = QComboBox()
-        self.cmb_projetos_salvos.setMinimumWidth(260)
+        self.cmb_projetos_salvos.setMinimumWidth(180)
         self.cmb_projetos_salvos.currentIndexChanged.connect(self._on_projeto_salvo_selecionado)
         proj_layout.addWidget(self.cmb_projetos_salvos, stretch=1)
 
-        self.btn_exportar_json = QPushButton("📥 Baixar (.json)")
+        self.btn_exportar_json = QPushButton("Backup (.json)")
+        self.btn_exportar_json.setIcon(get_icon("download", size=16))
         self.btn_exportar_json.setCursor(Qt.PointingHandCursor)
         self.btn_exportar_json.clicked.connect(self._exportar_projeto_json)
         proj_layout.addWidget(self.btn_exportar_json)
 
-        self.btn_excluir_proj = QPushButton("🗑️ Excluir")
+        self.btn_excluir_proj = QPushButton("Excluir")
+        self.btn_excluir_proj.setIcon(get_icon("trash", color="#dc2626", size=16))
+        self.btn_excluir_proj.setObjectName("btnDanger")
         self.btn_excluir_proj.setCursor(Qt.PointingHandCursor)
         self.btn_excluir_proj.clicked.connect(self._excluir_projeto_atual)
         proj_layout.addWidget(self.btn_excluir_proj)
@@ -218,43 +259,26 @@ class VesperaMainWindow(QMainWindow):
         root_layout.addWidget(proj_frame)
 
         # -------------------------------------------------------------------
-        # 3. Seletores Rápidos de Modo
+        # 3. Área Principal Dividida (Sidebar | Tabela com Abas | Gráfico)
         # -------------------------------------------------------------------
-        mode_bar = QHBoxLayout()
-        self.btn_modo_linhas = QPushButton("📈 Gráfico de Linhas — Pontos Amostrais (Manhã, Tarde e Noite)")
-        self.btn_modo_linhas.setCursor(Qt.PointingHandCursor)
-        self.btn_modo_linhas.setMinimumHeight(32)
-        self.btn_modo_linhas.clicked.connect(lambda: self._alternar_modo("linhas"))
-
-        self.btn_modo_barras = QPushButton(
-            "📊 Gráfico de Barras — Média e Desvio Padrão (Bosque vs. Estacionamento)"
-        )
-        self.btn_modo_barras.setCursor(Qt.PointingHandCursor)
-        self.btn_modo_barras.setMinimumHeight(32)
-        self.btn_modo_barras.clicked.connect(lambda: self._alternar_modo("barras"))
-
-        mode_bar.addWidget(self.btn_modo_linhas)
-        mode_bar.addWidget(self.btn_modo_barras)
-        root_layout.addLayout(mode_bar)
-
-        # -------------------------------------------------------------------
-        # 4. Área Principal Dividida (Sidebar | Tabela | Gráfico)
-        # -------------------------------------------------------------------
-        splitter = QSplitter(Qt.Horizontal)
+        self.splitter = QSplitter(Qt.Horizontal)
 
         self.sidebar = SidebarControlsWidget()
         self.table_widget = DataTableWidget()
         self.plot_widget = PlotCanvasWidget()
 
-        splitter.addWidget(self.sidebar)
-        splitter.addWidget(self.table_widget)
-        splitter.addWidget(self.plot_widget)
-        splitter.setStretchFactor(0, 0)
-        splitter.setStretchFactor(1, 1)
-        splitter.setStretchFactor(2, 1)
-        splitter.setSizes([330, 520, 580])
+        self.splitter.addWidget(self.sidebar)
+        self.splitter.addWidget(self.table_widget)
+        self.splitter.addWidget(self.plot_widget)
+        self.splitter.setCollapsible(0, True)
+        self.splitter.setCollapsible(1, False)
+        self.splitter.setCollapsible(2, False)
+        self.splitter.setStretchFactor(0, 0)
+        self.splitter.setStretchFactor(1, 1)
+        self.splitter.setStretchFactor(2, 1)
+        self.splitter.setSizes([310, 550, 580])
 
-        root_layout.addWidget(splitter, stretch=1)
+        root_layout.addWidget(self.splitter, stretch=1)
 
         # Barra de status inferior
         self.status_bar = QStatusBar()
@@ -277,18 +301,18 @@ class VesperaMainWindow(QMainWindow):
         projetos_dict = self.banco_projetos.get("projetos", {})
         if ultimo and ultimo in projetos_dict:
             self._aplicar_projeto_dict(projetos_dict[ultimo])
-            self.status_bar.showMessage(f"✅ Projeto '{ultimo}' restaurado automaticamente.")
+            self.status_bar.showMessage(f"Projeto '{ultimo}' restaurado.")
         else:
             self._carregar_preset("Dia 14 de Agosto")
-            self.status_bar.showMessage("💡 Pronto. Selecione um modelo ou edite os valores na tabela.")
+            self.status_bar.showMessage("Pronto. Selecione um modelo ou edite os valores na matriz de dados.")
 
     def _atualizar_botoes_modo(self):
         if self.tipo_grafico_atual == "linhas":
-            self.btn_modo_linhas.setObjectName("btnPrimary")
-            self.btn_modo_barras.setObjectName("")
+            self.btn_modo_linhas.setObjectName("btnSegmentActive")
+            self.btn_modo_barras.setObjectName("btnSegment")
         else:
-            self.btn_modo_linhas.setObjectName("")
-            self.btn_modo_barras.setObjectName("btnPrimary")
+            self.btn_modo_linhas.setObjectName("btnSegment")
+            self.btn_modo_barras.setObjectName("btnSegmentActive")
         self.style().unpolish(self.btn_modo_linhas)
         self.style().polish(self.btn_modo_linhas)
         self.style().unpolish(self.btn_modo_barras)
@@ -543,11 +567,11 @@ class VesperaMainWindow(QMainWindow):
         self._updating_project_combo = True
         self.cmb_projetos_salvos.clear()
         projetos = self.banco_projetos.get("projetos", {})
-        self.cmb_projetos_salvos.addItem(f"Selecione um projeto salvo ({len(projetos)})...", None)
+        self.cmb_projetos_salvos.addItem(f"Projetos salvos ({len(projetos)})...", None)
         for nome, p in projetos.items():
-            icone = "📊" if p.get("tipo_grafico") == "barras" else "📈"
+            tipo_str = "Barras" if p.get("tipo_grafico") == "barras" else "Linhas"
             data_str = p.get("atualizado_em", "")
-            self.cmb_projetos_salvos.addItem(f"{icone} {nome} ({data_str})", nome)
+            self.cmb_projetos_salvos.addItem(f"{nome} [{tipo_str}] ({data_str})", nome)
         self._updating_project_combo = False
 
     def _salvar_projeto_atual(self):
@@ -559,7 +583,7 @@ class VesperaMainWindow(QMainWindow):
         self.nome_projeto_atual = nome_final
         self.txt_nome_projeto.setText(nome_final)
         self._atualizar_combo_projetos()
-        self.status_bar.showMessage(f"💾 Projeto '{nome_final}' salvo com sucesso em {payload['atualizado_em']}.")
+        self.status_bar.showMessage(f"Projeto '{nome_final}' salvo com sucesso em {payload['atualizado_em']}.")
 
     def _on_projeto_salvo_selecionado(self, index: int):
         if self._updating_project_combo or index <= 0:
@@ -570,7 +594,7 @@ class VesperaMainWindow(QMainWindow):
             self._aplicar_projeto_dict(projetos[nome])
             self.banco_projetos["ultimo_projeto_ativo"] = nome
             self.project_manager.gravar_banco(self.banco_projetos)
-            self.status_bar.showMessage(f"📂 Projeto '{nome}' carregado com sucesso.")
+            self.status_bar.showMessage(f"Projeto '{nome}' carregado com sucesso.")
         self._updating_project_combo = True
         self.cmb_projetos_salvos.setCurrentIndex(0)
         self._updating_project_combo = False
@@ -594,7 +618,7 @@ class VesperaMainWindow(QMainWindow):
                 self.banco_projetos["ultimo_projeto_ativo"] = restantes[-1] if restantes else None
             self.project_manager.gravar_banco(self.banco_projetos)
             self._atualizar_combo_projetos()
-            self.status_bar.showMessage(f"🗑️ Projeto '{alvo}' excluído.")
+            self.status_bar.showMessage(f"Projeto '{alvo}' excluído.")
 
     def _exportar_projeto_json(self):
         payload = self._construir_payload_atual()
@@ -609,7 +633,7 @@ class VesperaMainWindow(QMainWindow):
             try:
                 with open(caminho, "w", encoding="utf-8") as f:
                     json.dump(payload, f, ensure_ascii=False, indent=2)
-                self.status_bar.showMessage(f"📥 Backup do projeto salvo em: {caminho}")
+                self.status_bar.showMessage(f"Backup do projeto salvo em: {caminho}")
             except Exception as e:
                 QMessageBox.critical(self, "Erro ao Exportar Projeto", str(e))
 
@@ -631,7 +655,7 @@ class VesperaMainWindow(QMainWindow):
                     self.banco_projetos["ultimo_projeto_ativo"] = nome_imp
                     self.project_manager.gravar_banco(self.banco_projetos)
                     self._atualizar_combo_projetos()
-                    self.status_bar.showMessage(f"✅ Projeto '{nome_imp}' importado e salvo!")
+                    self.status_bar.showMessage(f"Projeto '{nome_imp}' importado e salvo!")
                 else:
                     QMessageBox.warning(self, "Formato Inválido", "O arquivo selecionado não é um projeto válido.")
             except Exception as e:
@@ -679,7 +703,7 @@ class VesperaMainWindow(QMainWindow):
                 )
                 self._atualizar_botoes_modo()
                 self.atualizar_grafico()
-                self.status_bar.showMessage(f"✅ Planilha '{os.path.basename(caminho)}' importada com sucesso.")
+                self.status_bar.showMessage(f"Planilha '{os.path.basename(caminho)}' importada com sucesso.")
             else:
                 QMessageBox.warning(
                     self,
@@ -727,7 +751,6 @@ class VesperaMainWindow(QMainWindow):
             QMessageBox.critical(self, "Erro ao Exportar Planilha Excel", str(e))
 
     def _acionar_verificacao_atualizacao(self):
-        """Gancho para o módulo de atualização via GitHub (implementado na Etapa 3)."""
         try:
             from ui.update_dialog import UpdateDialog
             dlg = UpdateDialog(self)
@@ -743,9 +766,9 @@ class VesperaMainWindow(QMainWindow):
     def _mostrar_sobre(self):
         QMessageBox.about(
             self,
-            "Sobre o Vespera Sci",
-            "<h3>🌌 Vespera Sci v1.0.0</h3>"
-            "<p><b>Scientific Plotting & Data Analysis Studio</b></p>"
+            "Sobre o Vespera Sci Alpha",
+            "<h3>🌌 Vespera Sci — ALPHA Edition</h3>"
+            "<p><b>Scientific Plotting & Data Studio</b></p>"
             "<p>Plataforma desktop científica para análise de dados experimentais, "
             "estatística descritiva e produção de figuras no padrão OriginLab Pro / ABNT.</p>"
             "<p>Repositório: <a href='https://github.com/Igorhls/vespera-sci'>"

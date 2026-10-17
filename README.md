@@ -63,15 +63,18 @@ vespera-sci/
 
 ---
 
-## 🚀 Como Instalar e Executar Localmente
+## 🚀 Como Instalar e Executar
 
-### Opção 1: Instalação com 1 Clique (Windows)
-1. Baixe ou clone este repositório.
-2. Dê dois cliques em **`Instalar_Vespera_Sci.bat`** — ele instalará automaticamente as dependências necessárias e criará o atalho **"Vespera Sci"** na sua Área de Trabalho.
-3. Sempre que quiser abrir o programa, use o atalho na Área de Trabalho ou dê dois cliques em **`Iniciar_Vespera_Sci.bat`**.
-4. Dentro do programa, clique no botão **`🔄 Verificar Atualizações (GitHub)`** no canto superior direito para buscar e instalar novas versões enviadas ao repositório.
+### Opção 1: Instalador Online Direto (Para Compartilhar)
+1. Baixe apenas o arquivo **[`Instalar_Online.bat`](Instalar_Online.bat)**.
+2. Dê dois cliques nele — ele baixará automaticamente a versão mais recente do GitHub, configurará o ambiente e criará o atalho **"Vespera Sci Alpha"** na sua Área de Trabalho com o ícone oficial.
 
-### Opção 2: Via Terminal
+### Opção 2: Instalação Local (Repositório / ZIP)
+1. Baixe o código (Code > Download ZIP) ou clone o repositório.
+2. Dê dois cliques em **`Instalar_Vespera_Sci.bat`**.
+3. O atalho oficial será criado na sua Área de Trabalho. Sempre que quiser abrir, use o atalho ou execute **`Iniciar_Vespera_Sci.bat`**.
+
+### Opção 3: Via Terminal
 ```bash
 git clone https://github.com/Igorhls/vespera-sci.git
 cd vespera-sci
@@ -79,7 +82,7 @@ py -m pip install -r requirements.txt
 py main.py
 ```
 
-### Opção 3: Gerar Executável Independente (`.exe`)
+### Opção 4: Gerar Executável Independente (.exe)
 ```bash
 py build_exe.py
 ```

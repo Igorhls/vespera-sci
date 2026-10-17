@@ -1,7 +1,6 @@
 """
-Widget de edição tabular de dados experimentais (Linhas P1..Pn e Barras TA),
-incluindo importador de blocos copiados do Excel, calculadora rápida de Média/Desvio Padrão
-e sumário estatístico descritivo em tempo real.
+Widget de edição tabular de dados experimentais (Linhas P1..Pn e Barras TA).
+Repaginação visual completa: ícones vetoriais SVG, sem emojis, abas modernas e altura total para a tabela.
 """
 
 import numpy as np
@@ -9,6 +8,7 @@ import pandas as pd
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QApplication,
     QComboBox,
     QDoubleSpinBox,
     QFormLayout,
@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -34,10 +35,11 @@ from core.sanitizer import (
     sanitizar_dados_barras,
     sanitizar_dados_tabela,
 )
+from ui.icons import get_icon
 
 
 class DataTableWidget(QWidget):
-    """Painel central de entrada e edição de dados tabulares, metadados de eixos e estatísticas."""
+    """Painel central moderno com abas separadas para dados, estatísticas e ferramentas."""
 
     dataOrMetaChanged = Signal()
 
@@ -53,30 +55,38 @@ class DataTableWidget(QWidget):
         self._build_ui()
 
     def _build_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(6, 6, 6, 6)
-        layout.setSpacing(8)
+        root_layout = QVBoxLayout(self)
+        root_layout.setContentsMargins(6, 6, 6, 6)
+        root_layout.setSpacing(6)
 
-        self.lbl_secao = QLabel("<b>Matriz de Dados Experimentais (Pontos P1–Pn)</b>")
-        self.lbl_secao.setStyleSheet("font-size: 14px;")
-        layout.addWidget(self.lbl_secao)
+        # Sistema de Abas Principal da Área de Dados
+        self.tabs = QTabWidget()
+        root_layout.addWidget(self.tabs, stretch=1)
 
-        # -------------------------------------------------------------------
-        # 1. Metadados do Gráfico (Títulos, Eixos e Limites Y)
-        # -------------------------------------------------------------------
-        grp_meta = QGroupBox("Identificadores, Rótulos dos Eixos e Limites da Escala")
-        grid_meta = QGridLayout(grp_meta)
-        grid_meta.setContentsMargins(10, 10, 10, 10)
-        grid_meta.setHorizontalSpacing(10)
+        # ===================================================================
+        # ABA 1: Matriz de Dados (Tabela + Metadados Compactos)
+        # ===================================================================
+        tab_dados = QWidget()
+        layout_dados = QVBoxLayout(tab_dados)
+        layout_dados.setContentsMargins(8, 8, 8, 8)
+        layout_dados.setSpacing(8)
+
+        # 1. Card Superior Compacto de Metadados
+        meta_card = QFrame()
+        meta_card.setObjectName("cardPanel")
+        grid_meta = QGridLayout(meta_card)
+        grid_meta.setContentsMargins(10, 8, 10, 8)
+        grid_meta.setHorizontalSpacing(8)
         grid_meta.setVerticalSpacing(6)
 
-        self.lbl_tit_dia = QLabel("Identificador / Dia:")
+        self.lbl_tit_dia = QLabel("<b>Identificador / Dia:</b>")
         self.txt_titulo_dia = QLineEdit()
+        self.txt_titulo_dia.setPlaceholderText("Ex: Dia 14 de Agosto")
         self.txt_titulo_dia.textChanged.connect(self._on_meta_changed)
 
-        self.lbl_tit_graf = QLabel("Título do Gráfico:")
+        self.lbl_tit_graf = QLabel("<b>Título no Gráfico:</b>")
         self.txt_titulo_grafico = QLineEdit()
-        self.txt_titulo_grafico.setPlaceholderText("Deixe vazio para padrão sem título superior")
+        self.txt_titulo_grafico.setPlaceholderText("Opcional (vazio = sem título)")
         self.txt_titulo_grafico.textChanged.connect(self._on_meta_changed)
 
         grid_meta.addWidget(self.lbl_tit_dia, 0, 0)
@@ -89,9 +99,9 @@ class DataTableWidget(QWidget):
         self.txt_rotulo_y = QLineEdit()
         self.txt_rotulo_y.textChanged.connect(self._on_meta_changed)
 
-        grid_meta.addWidget(QLabel("Legenda Eixo X:"), 1, 0)
+        grid_meta.addWidget(QLabel("<b>Eixo X:</b>"), 1, 0)
         grid_meta.addWidget(self.txt_rotulo_x, 1, 1)
-        grid_meta.addWidget(QLabel("Legenda Eixo Y:"), 1, 2)
+        grid_meta.addWidget(QLabel("<b>Eixo Y:</b>"), 1, 2)
         grid_meta.addWidget(self.txt_rotulo_y, 1, 3)
 
         self.spn_min_y = QDoubleSpinBox()
@@ -106,56 +116,189 @@ class DataTableWidget(QWidget):
         self.spn_max_y.setSingleStep(1.0)
         self.spn_max_y.valueChanged.connect(self._on_meta_changed)
 
-        grid_meta.addWidget(QLabel("Y Mínimo:"), 2, 0)
+        grid_meta.addWidget(QLabel("<b>Y Mínimo:</b>"), 2, 0)
         grid_meta.addWidget(self.spn_min_y, 2, 1)
-        grid_meta.addWidget(QLabel("Y Máximo:"), 2, 2)
+        grid_meta.addWidget(QLabel("<b>Y Máximo:</b>"), 2, 2)
         grid_meta.addWidget(self.spn_max_y, 2, 3)
 
-        layout.addWidget(grp_meta)
+        layout_dados.addWidget(meta_card)
 
-        # -------------------------------------------------------------------
-        # 2. Personalização dos Nomes das Colunas na Legenda (Modo Barras)
-        # -------------------------------------------------------------------
-        self.grp_rotulos_barras = QGroupBox("Personalizar Nomes das Séries na Tabela e Legenda")
+        # 2. Configuração de nomes das séries em Modo Barras
+        self.grp_rotulos_barras = QFrame()
+        self.grp_rotulos_barras.setObjectName("cardPanel")
         rb_layout = QHBoxLayout(self.grp_rotulos_barras)
-        rb_layout.setContentsMargins(10, 8, 10, 8)
+        rb_layout.setContentsMargins(10, 6, 10, 6)
+        rb_layout.setSpacing(6)
+
+        rb_layout.addWidget(QLabel("<b>Séries:</b>"))
         self.txt_rs1 = QLineEdit("Bosque")
         self.txt_rs2 = QLineEdit("Desvio/p")
         self.txt_rs3 = QLineEdit("Estacionamento")
         self.txt_rs4 = QLineEdit("Desvio/p")
-        for lbl_txt, w_edit in [
-            ("Série 1:", self.txt_rs1),
-            ("Série 2:", self.txt_rs2),
-            ("Série 3:", self.txt_rs3),
-            ("Série 4:", self.txt_rs4),
+
+        for lbl_t, w_edit in [
+            ("S1:", self.txt_rs1),
+            ("S2:", self.txt_rs2),
+            ("S3:", self.txt_rs3),
+            ("S4:", self.txt_rs4),
         ]:
-            rb_layout.addWidget(QLabel(lbl_txt))
+            rb_layout.addWidget(QLabel(lbl_t))
             rb_layout.addWidget(w_edit)
             w_edit.textChanged.connect(self._on_rotulos_barras_changed)
+
         self.grp_rotulos_barras.setVisible(False)
-        layout.addWidget(self.grp_rotulos_barras)
+        layout_dados.addWidget(self.grp_rotulos_barras)
 
-        # -------------------------------------------------------------------
-        # 3. Ferramenta para Colar Bloco do Excel (Expansível)
-        # -------------------------------------------------------------------
-        self.btn_toggle_paste = QPushButton("📋 Importar Bloco de Dados do Excel (Copiar e Colar) ▾")
-        self.btn_toggle_paste.setCheckable(True)
-        self.btn_toggle_paste.setCursor(Qt.PointingHandCursor)
-        self.btn_toggle_paste.toggled.connect(self._toggle_paste_box)
-        layout.addWidget(self.btn_toggle_paste)
+        # 3. Barra de Ferramentas da Tabela com Ícones Vetoriais
+        hl_table_btns = QHBoxLayout()
+        hl_table_btns.setSpacing(6)
 
-        self.grp_paste = QGroupBox("Colar Células Copiadas do Excel (Ctrl+C -> Ctrl+V)")
-        paste_layout = QVBoxLayout(self.grp_paste)
-        paste_layout.setContentsMargins(10, 8, 10, 8)
+        self.btn_add_row = QPushButton("Linha")
+        self.btn_add_row.setIcon(get_icon("plus", size=15))
+        self.btn_add_row.setCursor(Qt.PointingHandCursor)
+        self.btn_add_row.clicked.connect(self._adicionar_linha)
 
-        self.lbl_paste_hint = QLabel(
-            "Copie as células no Excel e cole abaixo. As vírgulas decimais são convertidas automaticamente."
+        self.btn_del_row = QPushButton("Remover")
+        self.btn_del_row.setIcon(get_icon("minus", size=15))
+        self.btn_del_row.setCursor(Qt.PointingHandCursor)
+        self.btn_del_row.clicked.connect(self._remover_linha)
+
+        self.btn_renum = QPushButton("Renumerar")
+        self.btn_renum.setIcon(get_icon("hash", size=15))
+        self.btn_renum.setCursor(Qt.PointingHandCursor)
+        self.btn_renum.clicked.connect(self._renumerar_pontos)
+
+        self.btn_padronizar = QPushButton("Padronizar")
+        self.btn_padronizar.setIcon(get_icon("wand", size=15))
+        self.btn_padronizar.setCursor(Qt.PointingHandCursor)
+        self.btn_padronizar.clicked.connect(self._padronizar_decimais)
+
+        self.btn_ir_colar = QPushButton("Colar do Excel")
+        self.btn_ir_colar.setIcon(get_icon("clipboard", size=15))
+        self.btn_ir_colar.setObjectName("btnPrimary")
+        self.btn_ir_colar.setCursor(Qt.PointingHandCursor)
+        self.btn_ir_colar.clicked.connect(lambda: self.tabs.setCurrentIndex(3))
+
+        hl_table_btns.addWidget(self.btn_add_row)
+        hl_table_btns.addWidget(self.btn_del_row)
+        hl_table_btns.addWidget(self.btn_renum)
+        hl_table_btns.addWidget(self.btn_padronizar)
+        hl_table_btns.addStretch()
+        hl_table_btns.addWidget(self.btn_ir_colar)
+
+        layout_dados.addLayout(hl_table_btns)
+
+        # 4. Tabela de Dados Principal (Altura total desimpedida)
+        self.table = QTableWidget()
+        self.table.setAlternatingRowColors(True)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectItems)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.itemChanged.connect(self._on_table_item_changed)
+        layout_dados.addWidget(self.table, stretch=1)
+
+        self.tabs.addTab(tab_dados, get_icon("table", size=16), "Matriz de Dados")
+
+        # ===================================================================
+        # ABA 2: Resumo Estatístico Descritivo
+        # ===================================================================
+        tab_stats = QWidget()
+        layout_stats = QVBoxLayout(tab_stats)
+        layout_stats.setContentsMargins(12, 12, 12, 12)
+        layout_stats.setSpacing(10)
+
+        lbl_stats_head = QLabel("<b>Sumário Estatístico Descritivo das Medições</b>")
+        lbl_stats_head.setStyleSheet("font-size: 14px;")
+        layout_stats.addWidget(lbl_stats_head)
+
+        lbl_stats_sub = QLabel(
+            "Métricas calculadas em tempo real com base nos valores preenchidos na matriz de dados."
         )
-        self.lbl_paste_hint.setWordWrap(True)
-        paste_layout.addWidget(self.lbl_paste_hint)
+        lbl_stats_sub.setStyleSheet("color: #64748b; font-size: 11.5px;")
+        layout_stats.addWidget(lbl_stats_sub)
+
+        self.card_stats_container = QFrame()
+        self.card_stats_container.setObjectName("cardPanel")
+        stats_box_layout = QVBoxLayout(self.card_stats_container)
+        stats_box_layout.setContentsMargins(14, 14, 14, 14)
+
+        self.lbl_stats = QLabel("Sem dados numéricos na tabela.")
+        self.lbl_stats.setWordWrap(True)
+        self.lbl_stats.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.lbl_stats.setStyleSheet("font-size: 13px; line-height: 1.6;")
+        stats_box_layout.addWidget(self.lbl_stats)
+
+        layout_stats.addWidget(self.card_stats_container)
+
+        btn_copiar_stats = QPushButton("Copiar Resumo para Área de Transferência")
+        btn_copiar_stats.setIcon(get_icon("clipboard", size=16))
+        btn_copiar_stats.setCursor(Qt.PointingHandCursor)
+        btn_copiar_stats.clicked.connect(self._copiar_resumo_estatistico)
+        layout_stats.addWidget(btn_copiar_stats)
+
+        layout_stats.addStretch()
+        self.tabs.addTab(tab_stats, get_icon("activity", size=16), "Resumo Estatístico")
+
+        # ===================================================================
+        # ABA 3: Calculadora Rápida
+        # ===================================================================
+        tab_calc = QWidget()
+        layout_calc = QVBoxLayout(tab_calc)
+        layout_calc.setContentsMargins(12, 12, 12, 12)
+        layout_calc.setSpacing(10)
+
+        lbl_calc_head = QLabel("<b>Calculadora de Média e Desvio Padrão Amostral</b>")
+        lbl_calc_head.setStyleSheet("font-size: 14px;")
+        layout_calc.addWidget(lbl_calc_head)
+
+        lbl_calc_sub = QLabel(
+            "Digite ou cole números avulsos separados por espaço, vírgula ou ponto-e-vírgula para obter Média e Desvio Padrão (s)."
+        )
+        lbl_calc_sub.setWordWrap(True)
+        lbl_calc_sub.setStyleSheet("color: #64748b; font-size: 11.5px;")
+        layout_calc.addWidget(lbl_calc_sub)
+
+        self.txt_calc_input = QLineEdit()
+        self.txt_calc_input.setPlaceholderText("Ex: 26,2 26,5 26,9 27,2 27,4 27,1")
+        self.txt_calc_input.setMinimumHeight(34)
+        self.txt_calc_input.textChanged.connect(self._atualizar_calculadora)
+        layout_calc.addWidget(self.txt_calc_input)
+
+        calc_result_card = QFrame()
+        calc_result_card.setObjectName("cardPanel")
+        crc_layout = QVBoxLayout(calc_result_card)
+        crc_layout.setContentsMargins(14, 14, 14, 14)
+
+        self.lbl_calc_result = QLabel("Digite ao menos 2 valores acima para calcular.")
+        self.lbl_calc_result.setStyleSheet("font-size: 13px; font-weight: 500;")
+        self.lbl_calc_result.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        crc_layout.addWidget(self.lbl_calc_result)
+        layout_calc.addWidget(calc_result_card)
+
+        layout_calc.addStretch()
+        self.tabs.addTab(tab_calc, get_icon("calculator", size=16), "Calculadora Rápida")
+
+        # ===================================================================
+        # ABA 4: Importador Direto do Excel
+        # ===================================================================
+        tab_paste = QWidget()
+        layout_paste = QVBoxLayout(tab_paste)
+        layout_paste.setContentsMargins(12, 12, 12, 12)
+        layout_paste.setSpacing(10)
+
+        lbl_paste_head = QLabel("<b>Importar Bloco de Dados do Excel (Ctrl+C ➔ Ctrl+V)</b>")
+        lbl_paste_head.setStyleSheet("font-size: 14px;")
+        layout_paste.addWidget(lbl_paste_head)
+
+        lbl_paste_sub = QLabel(
+            "Selecione uma faixa de células no Excel, pressione Ctrl+C e cole abaixo. "
+            "Vírgulas decimais brasileiras e números inteiros colados são corrigidos automaticamente."
+        )
+        lbl_paste_sub.setWordWrap(True)
+        lbl_paste_sub.setStyleSheet("color: #64748b; font-size: 11.5px;")
+        layout_paste.addWidget(lbl_paste_sub)
 
         hl_dest = QHBoxLayout()
-        self.lbl_destino = QLabel("Destino dos dados:")
+        self.lbl_destino = QLabel("<b>Destino das Colunas:</b>")
         self.cmb_destino_colar = QComboBox()
         self.cmb_destino_colar.addItems([
             "Apenas Manhã",
@@ -166,87 +309,36 @@ class DataTableWidget(QWidget):
         ])
         hl_dest.addWidget(self.lbl_destino)
         hl_dest.addWidget(self.cmb_destino_colar, stretch=1)
-        paste_layout.addLayout(hl_dest)
+        layout_paste.addLayout(hl_dest)
 
         self.txt_paste = QPlainTextEdit()
-        self.txt_paste.setPlaceholderText("Cole aqui os valores copiados do Excel...")
-        self.txt_paste.setMaximumHeight(90)
-        paste_layout.addWidget(self.txt_paste)
+        self.txt_paste.setPlaceholderText("Cole aqui os dados copiados do Excel (Ctrl+V)...")
+        self.txt_paste.setMinimumHeight(150)
+        layout_paste.addWidget(self.txt_paste, stretch=1)
 
-        btn_aplicar_paste = QPushButton("✅ Aplicar Dados na Tabela")
+        btn_aplicar_paste = QPushButton("Aplicar Dados na Tabela Principal")
+        btn_aplicar_paste.setIcon(get_icon("check", color="#ffffff", size=16))
+        btn_aplicar_paste.setObjectName("btnSuccess")
         btn_aplicar_paste.setCursor(Qt.PointingHandCursor)
+        btn_aplicar_paste.setMinimumHeight(36)
         btn_aplicar_paste.clicked.connect(self._aplicar_colagem_excel)
-        paste_layout.addWidget(btn_aplicar_paste)
+        layout_paste.addWidget(btn_aplicar_paste)
 
-        self.grp_paste.setVisible(False)
-        layout.addWidget(self.grp_paste)
+        self.tabs.addTab(tab_paste, get_icon("clipboard", size=16), "Colar do Excel")
 
-        # -------------------------------------------------------------------
-        # 4. Tabela Editável Principal + Barra de Ações da Tabela
-        # -------------------------------------------------------------------
-        hl_table_btns = QHBoxLayout()
-        self.btn_add_row = QPushButton("➕ Nova Linha")
-        self.btn_add_row.clicked.connect(self._adicionar_linha)
+        # Rótulos para compatibilidade legada
+        self.lbl_secao = QLabel()
+        self.btn_toggle_paste = QPushButton()
+        self.grp_paste = QWidget()
 
-        self.btn_del_row = QPushButton("➖ Remover Linha")
-        self.btn_del_row.clicked.connect(self._remover_linha)
-
-        self.btn_renum = QPushButton("🔢 Renumerar P1..Pn")
-        self.btn_renum.clicked.connect(self._renumerar_pontos)
-
-        self.btn_padronizar = QPushButton("🧹 Padronizar Decimais")
-        self.btn_padronizar.clicked.connect(self._padronizar_decimais)
-
-        hl_table_btns.addWidget(self.btn_add_row)
-        hl_table_btns.addWidget(self.btn_del_row)
-        hl_table_btns.addWidget(self.btn_renum)
-        hl_table_btns.addWidget(self.btn_padronizar)
-        layout.addLayout(hl_table_btns)
-
-        self.table = QTableWidget()
-        self.table.setAlternatingRowColors(True)
-        self.table.setSelectionBehavior(QAbstractItemView.SelectItems)
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.table.itemChanged.connect(self._on_table_item_changed)
-        layout.addWidget(self.table, stretch=1)
-
-        # -------------------------------------------------------------------
-        # 5. Calculadora Auxiliar de Média e Desvio Padrão
-        # -------------------------------------------------------------------
-        grp_calc = QGroupBox("🧮 Calculadora Rápida de Média e Desvio Padrão Amostral")
-        calc_layout = QVBoxLayout(grp_calc)
-        calc_layout.setContentsMargins(10, 8, 10, 8)
-        self.txt_calc_input = QLineEdit()
-        self.txt_calc_input.setPlaceholderText("Digite ou cole valores separados por espaço ou ';' (ex: 26,2 26,5 26,9 27,2)")
-        self.txt_calc_input.textChanged.connect(self._atualizar_calculadora)
-        self.lbl_calc_result = QLabel("Digite ao menos 2 valores acima para calcular Média e Desvio Padrão.")
-        self.lbl_calc_result.setStyleSheet("color: #2c3e50; font-size: 12px;")
-        calc_layout.addWidget(self.txt_calc_input)
-        calc_layout.addWidget(self.lbl_calc_result)
-        layout.addWidget(grp_calc)
-
-        # -------------------------------------------------------------------
-        # 6. Sumário Estatístico Descritivo
-        # -------------------------------------------------------------------
-        grp_stats = QGroupBox("📊 Sumário Estatístico Descritivo das Medições")
-        stats_layout = QVBoxLayout(grp_stats)
-        stats_layout.setContentsMargins(10, 8, 10, 8)
-        self.lbl_stats = QLabel()
-        self.lbl_stats.setWordWrap(True)
-        self.lbl_stats.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        stats_layout.addWidget(self.lbl_stats)
-        layout.addWidget(grp_stats)
+    def _copiar_resumo_estatistico(self):
+        txt = self.lbl_stats.text().replace("<br>", "\n").replace("<b>", "").replace("</b>", "").replace("&nbsp;", " ")
+        QApplication.clipboard().setText(txt)
 
     def _toggle_paste_box(self, checked: bool):
-        self.grp_paste.setVisible(checked)
-        self.btn_toggle_paste.setText(
-            "📋 Importar Bloco de Dados do Excel (Copiar e Colar) ▴"
-            if checked
-            else "📋 Importar Bloco de Dados do Excel (Copiar e Colar) ▾"
-        )
+        self.tabs.setCurrentIndex(3 if checked else 0)
 
     def configurar_modo(self, tipo_grafico: str):
-        """Alterna o layout da tabela entre 'linhas' e 'barras'."""
         self._updating_ui = True
         self.tipo_grafico = tipo_grafico
         is_linhas = tipo_grafico == "linhas"
@@ -256,14 +348,12 @@ class DataTableWidget(QWidget):
         self.cmb_destino_colar.setVisible(is_linhas)
 
         if is_linhas:
-            self.lbl_secao.setText("<b>Matriz de Dados Experimentais (Pontos P1–Pn)</b>")
-            self.lbl_tit_dia.setText("Identificador / Dia:")
-            self.btn_renum.setText("🔢 Renumerar P1..Pn")
+            self.lbl_tit_dia.setText("<b>Identificador / Dia:</b>")
+            self.btn_renum.setText("Renumerar")
             self.txt_paste.setPlaceholderText("Cole aqui os dados copiados do Excel...")
         else:
-            self.lbl_secao.setText("<b>Tabela de Média e Desvio Padrão (TA)</b>")
-            self.lbl_tit_dia.setText("Cabeçalho / Variável:")
-            self.btn_renum.setText("🔄 Restaurar Modelo TA")
+            self.lbl_tit_dia.setText("<b>Cabeçalho / Variável:</b>")
+            self.btn_renum.setText("Restaurar Modelo TA")
             self.txt_paste.setPlaceholderText(
                 "Agosto\t27,32\t2,3\t28,5\t4,87\nDezembro\t28,6\t1,42\t29,4\t2,19"
             )
@@ -593,6 +683,7 @@ class DataTableWidget(QWidget):
         self._popular_tabela()
         self.atualizar_sumario_estatistico()
         self.dataOrMetaChanged.emit()
+        self.tabs.setCurrentIndex(0)
 
     def _atualizar_calculadora(self, texto: str):
         partes = [
@@ -613,7 +704,7 @@ class DataTableWidget(QWidget):
                 f"<b>Desvio Padrão (s):</b> {formatar_numero_ptbr(est['desvio'])} &nbsp;|&nbsp; "
                 f"<b>Mín:</b> {formatar_numero_ptbr(est['minimo'])} &nbsp;|&nbsp; "
                 f"<b>Máx:</b> {formatar_numero_ptbr(est['maximo'])} &nbsp;|&nbsp; "
-                f"<b>N:</b> {est['n']}"
+                f"<b>N:</b> {est['n']} medições"
             )
         else:
             self.lbl_calc_result.setText("Digite ao menos 2 valores acima para calcular Média e Desvio Padrão.")
@@ -626,12 +717,12 @@ class DataTableWidget(QWidget):
                     est = calcular_estatisticas_serie(self.df_linhas[per])
                     if est:
                         blocos.append(
-                            f"<b>{label}:</b> Média = {est['media']:.2f} °C | "
-                            f"Desvio (s) = {est['desvio']:.2f} °C | "
-                            f"Mín = {est['minimo']:.1f} °C | Máx = {est['maximo']:.1f} °C | "
-                            f"Amplitude = {est['amplitude']:.1f} °C"
+                            f"<b>{label}:</b> Média = <b>{est['media']:.2f} °C</b> &nbsp;|&nbsp; "
+                            f"Desvio (s) = <b>{est['desvio']:.2f} °C</b> &nbsp;|&nbsp; "
+                            f"Mín = <b>{est['minimo']:.1f} °C</b> &nbsp;|&nbsp; Máx = <b>{est['maximo']:.1f} °C</b> &nbsp;|&nbsp; "
+                            f"Amplitude = <b>{est['amplitude']:.1f} °C</b> (N={est['n']})"
                         )
-            self.lbl_stats.setText("<br>".join(blocos) if blocos else "Sem dados numéricos na tabela.")
+            self.lbl_stats.setText("<br><br>".join(blocos) if blocos else "Sem dados numéricos na tabela.")
         else:
             linhas_txt = []
             r1 = self.txt_rs1.text() or "Bosque"
@@ -642,5 +733,5 @@ class DataTableWidget(QWidget):
                 db = formatar_numero_ptbr(row.get("Desvio_Bosque"))
                 ve = formatar_numero_ptbr(row.get("Estacionamento"))
                 de = formatar_numero_ptbr(row.get("Desvio_Estacionamento"))
-                linhas_txt.append(f"<b>{mes}:</b> {r1} = {vb} (±{db}) &nbsp;|&nbsp; {r3} = {ve} (±{de})")
-            self.lbl_stats.setText("<br>".join(linhas_txt) if linhas_txt else "Sem dados na tabela.")
+                linhas_txt.append(f"<b>{mes}:</b> {r1} = <b>{vb} (±{db})</b> &nbsp;|&nbsp; {r3} = <b>{ve} (±{de})</b>")
+            self.lbl_stats.setText("<br><br>".join(linhas_txt) if linhas_txt else "Sem dados na tabela.")
