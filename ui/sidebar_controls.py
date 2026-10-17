@@ -107,7 +107,7 @@ class SidebarControlsWidget(QScrollArea):
         self.tipo_grafico = "linhas"
         self.setWidgetResizable(True)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.setMinimumWidth(300)
+        self.setMinimumWidth(340)
 
         self.container = QWidget()
         self.setWidget(self.container)
@@ -133,9 +133,9 @@ class SidebarControlsWidget(QScrollArea):
         header_top.addWidget(lbl_presets)
         header_top.addStretch()
 
-        self.btn_hide = QPushButton("Ocultar")
-        self.btn_hide.setIcon(get_icon("sidebar", size=14))
-        self.btn_hide.setToolTip("Ocultar Painel Lateral (Ctrl+B)")
+        self.btn_hide = QPushButton(" Fechar")
+        self.btn_hide.setIcon(get_icon("x", size=13))
+        self.btn_hide.setToolTip("Fechar Submenu de Configurações")
         self.btn_hide.setCursor(Qt.PointingHandCursor)
         self.btn_hide.clicked.connect(self.hideRequested.emit)
         header_top.addWidget(self.btn_hide)

@@ -27,6 +27,7 @@ class PlotCanvasWidget(QWidget):
     seriesVisibilityChanged = Signal()
     exportExcelRequested = Signal(str)
     hideRequested = Signal()
+    configRequested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -82,6 +83,13 @@ class PlotCanvasWidget(QWidget):
             "<span style='color: #64748b; font-size: 11px;'><b>Dica:</b> Arraste a legenda livremente &bull; Barra inferior para zoom e pan</span>"
         )
         series_layout.addWidget(lbl_dica)
+
+        self.btn_config = QPushButton(" Configurações")
+        self.btn_config.setIcon(get_icon("sliders", size=14))
+        self.btn_config.setToolTip("Abrir Submenu de Configurações e Estilo do Gráfico (Ctrl+E)")
+        self.btn_config.setCursor(Qt.PointingHandCursor)
+        self.btn_config.clicked.connect(self.configRequested.emit)
+        series_layout.addWidget(self.btn_config)
 
         self.btn_hide = QPushButton(" Ocultar")
         self.btn_hide.setIcon(get_icon("x", size=13))

@@ -12,6 +12,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
+    QDialog,
     QFileDialog,
     QFrame,
     QHBoxLayout,
@@ -80,23 +81,28 @@ class VesperaMainWindow(QMainWindow):
             self.btn_toggle_theme.setText("Modo Escuro")
             self.btn_toggle_theme.setIcon(get_icon("moon", color="#6366f1", size=16))
 
-    def _alternar_sidebar(self):
-        visivel = self.sidebar.isVisible()
-        if visivel and not self.table_widget.isVisible() and not self.plot_widget.isVisible():
-            return
-        self.sidebar.setVisible(not visivel)
-        self.btn_toggle_sidebar.setChecked(not visivel)
+    def _alternar_submenu(self):
+        if self.submenu_dialog.isVisible():
+            self.submenu_dialog.hide()
+            self.btn_toggle_submenu.setChecked(False)
+        else:
+            geom = self.geometry()
+            self.submenu_dialog.move(geom.x() + 30, geom.y() + 80)
+            self.submenu_dialog.show()
+            self.submenu_dialog.raise_()
+            self.submenu_dialog.activateWindow()
+            self.btn_toggle_submenu.setChecked(True)
 
     def _alternar_tabela(self):
         visivel = self.table_widget.isVisible()
-        if visivel and not self.sidebar.isVisible() and not self.plot_widget.isVisible():
+        if visivel and not self.plot_widget.isVisible():
             return
         self.table_widget.setVisible(not visivel)
         self.btn_toggle_table.setChecked(not visivel)
 
     def _alternar_grafico(self):
         visivel = self.plot_widget.isVisible()
-        if visivel and not self.sidebar.isVisible() and not self.table_widget.isVisible():
+        if visivel and not self.table_widget.isVisible():
             return
         self.plot_widget.setVisible(not visivel)
         self.btn_toggle_plot.setChecked(not visivel)
@@ -137,11 +143,11 @@ class VesperaMainWindow(QMainWindow):
 
         menu_exibir.addSeparator()
 
-        act_side = QAction("Alternar Painel Lateral", self)
-        act_side.setIcon(get_icon("sidebar", size=16))
-        act_side.setShortcut(QKeySequence("Ctrl+B"))
-        act_side.triggered.connect(self._alternar_sidebar)
-        menu_exibir.addAction(act_side)
+        act_sub = QAction("Submenu de Configurações do Gráfico...", self)
+        act_sub.setIcon(get_icon("sliders", size=16))
+        act_sub.setShortcut(QKeySequence("Ctrl+E"))
+        act_sub.triggered.connect(self._alternar_submenu)
+        menu_exibir.addAction(act_sub)
 
         act_table = QAction("Alternar Tabela de Dados", self)
         act_table.setIcon(get_icon("table", size=16))
@@ -224,14 +230,14 @@ class VesperaMainWindow(QMainWindow):
 
         header_layout.addStretch()
 
-        # Controles de Exibição dos Painéis (Sidebar, Tabela, Gráfico)
-        self.btn_toggle_sidebar = QPushButton("Painel")
-        self.btn_toggle_sidebar.setIcon(get_icon("sidebar", size=16))
-        self.btn_toggle_sidebar.setCheckable(True)
-        self.btn_toggle_sidebar.setChecked(True)
-        self.btn_toggle_sidebar.setCursor(Qt.PointingHandCursor)
-        self.btn_toggle_sidebar.setToolTip("Exibir/Ocultar Painel Lateral de Configurações (Ctrl+B)")
-        self.btn_toggle_sidebar.clicked.connect(self._alternar_sidebar)
+        # Controles de Exibição dos Painéis e Submenu
+        self.btn_toggle_submenu = QPushButton("Configurações")
+        self.btn_toggle_submenu.setIcon(get_icon("sliders", size=16))
+        self.btn_toggle_submenu.setCheckable(True)
+        self.btn_toggle_submenu.setChecked(False)
+        self.btn_toggle_submenu.setCursor(Qt.PointingHandCursor)
+        self.btn_toggle_submenu.setToolTip("Abrir/Fechar Submenu de Configurações e Estilo do Gráfico (Ctrl+E)")
+        self.btn_toggle_submenu.clicked.connect(self._alternar_submenu)
 
         self.btn_toggle_table = QPushButton("Tabela")
         self.btn_toggle_table.setIcon(get_icon("table", size=16))
@@ -249,7 +255,7 @@ class VesperaMainWindow(QMainWindow):
         self.btn_toggle_plot.setToolTip("Exibir/Ocultar Visualizador do Gráfico (Ctrl+G)")
         self.btn_toggle_plot.clicked.connect(self._alternar_grafico)
 
-        header_layout.addWidget(self.btn_toggle_sidebar)
+        header_layout.addWidget(self.btn_toggle_submenu)
         header_layout.addWidget(self.btn_toggle_table)
         header_layout.addWidget(self.btn_toggle_plot)
 
@@ -313,24 +319,20 @@ class VesperaMainWindow(QMainWindow):
         root_layout.addWidget(proj_frame)
 
         # -------------------------------------------------------------------
-        # 3. Área Principal Dividida (Sidebar | Tabela com Abas | Gráfico)
+        # 3. Área Principal Dividida: Tabela de Dados e Gráfico Científico
         # -------------------------------------------------------------------
         self.splitter = QSplitter(Qt.Horizontal)
 
-        self.sidebar = SidebarControlsWidget()
         self.table_widget = DataTableWidget()
         self.plot_widget = PlotCanvasWidget()
 
-        self.splitter.addWidget(self.sidebar)
         self.splitter.addWidget(self.table_widget)
         self.splitter.addWidget(self.plot_widget)
         self.splitter.setCollapsible(0, True)
         self.splitter.setCollapsible(1, True)
-        self.splitter.setCollapsible(2, True)
-        self.splitter.setStretchFactor(0, 0)
+        self.splitter.setStretchFactor(0, 1)
         self.splitter.setStretchFactor(1, 1)
-        self.splitter.setStretchFactor(2, 2)
-        self.splitter.setSizes([310, 520, 880])
+        self.splitter.setSizes([750, 950])
 
         # Habilitar divisores interativos com auto-ajuste responsivo à tela
         for i in range(self.splitter.count()):
@@ -339,6 +341,23 @@ class VesperaMainWindow(QMainWindow):
                 h.setEnabled(True)
 
         root_layout.addWidget(self.splitter, stretch=1)
+
+        # -------------------------------------------------------------------
+        # 4. Submenu Flutuante Não-Modal de Configurações e Estilo do Gráfico
+        # -------------------------------------------------------------------
+        self.sidebar = SidebarControlsWidget()
+
+        self.submenu_dialog = QDialog(self, Qt.Tool | Qt.WindowCloseButtonHint)
+        self.submenu_dialog.setWindowTitle("Configurações & Estilo do Gráfico — Vespera Sci")
+        icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "app_icon.png")
+        if os.path.exists(icon_path):
+            self.submenu_dialog.setWindowIcon(QIcon(icon_path))
+
+        sub_layout = QVBoxLayout(self.submenu_dialog)
+        sub_layout.setContentsMargins(4, 4, 4, 4)
+        sub_layout.addWidget(self.sidebar)
+        self.submenu_dialog.resize(360, 760)
+        self.submenu_dialog.finished.connect(lambda r=0: self.btn_toggle_submenu.setChecked(False))
 
         # Barra de status inferior
         self.status_bar = QStatusBar()
@@ -350,7 +369,7 @@ class VesperaMainWindow(QMainWindow):
         self.sidebar.presetSelected.connect(self._carregar_preset)
         self.sidebar.importSpreadsheetRequested.connect(self._importar_planilha)
         self.sidebar.importProjectFileRequested.connect(self._importar_arquivo_projeto)
-        self.sidebar.hideRequested.connect(self._alternar_sidebar)
+        self.sidebar.hideRequested.connect(self._alternar_submenu)
 
         self.table_widget.dataOrMetaChanged.connect(self.atualizar_grafico)
         self.table_widget.hideRequested.connect(self._alternar_tabela)
@@ -358,6 +377,7 @@ class VesperaMainWindow(QMainWindow):
         self.plot_widget.seriesVisibilityChanged.connect(self.atualizar_grafico)
         self.plot_widget.exportExcelRequested.connect(self._exportar_planilha_excel)
         self.plot_widget.hideRequested.connect(self._alternar_grafico)
+        self.plot_widget.configRequested.connect(self._alternar_submenu)
 
     def _inicializar_sessao(self):
         self._atualizar_combo_projetos()

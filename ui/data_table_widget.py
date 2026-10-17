@@ -48,7 +48,7 @@ class DataTableWidget(QWidget):
         super().__init__(parent)
         self._updating_ui = False
         self.tipo_grafico = "linhas"
-        self.setMinimumWidth(460)
+        self.setMinimumWidth(560)
         self.df_linhas = pd.DataFrame(columns=["Pontos", "Manha", "Tarde", "Noite"])
         self.df_barras = pd.DataFrame(
             columns=["Mes", "Bosque", "Desvio_Bosque", "Estacionamento", "Desvio_Estacionamento"]
