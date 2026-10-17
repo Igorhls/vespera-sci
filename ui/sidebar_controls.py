@@ -29,6 +29,9 @@ from config.themes import (
     COORDENADAS_LEGENDA_PRESET,
     DEFAULT_CONFIG,
     FONTES_DISPONIVEIS,
+    MAPA_SIMBOLOS,
+    MAPA_TRACOS,
+    MODOS_ESTILO_LINHAS,
     PALETAS_BARRAS,
     PALETAS_LINHAS,
     POSICOES_LEGENDA,
@@ -198,25 +201,97 @@ class SidebarControlsWidget(QScrollArea):
         # Opções Linhas
         self.grp_opcoes_linhas = QGroupBox("Traços e Marcadores (Linhas)")
         ol_layout = QVBoxLayout(self.grp_opcoes_linhas)
-        ol_layout.setSpacing(6)
+        ol_layout.setSpacing(8)
+
+        lbl_modo = QLabel("<b>Apresentação das Linhas:</b>")
+        ol_layout.addWidget(lbl_modo)
+
+        self.cmb_modo_linhas = QComboBox()
+        self.cmb_modo_linhas.addItems(MODOS_ESTILO_LINHAS)
+        self.cmb_modo_linhas.currentIndexChanged.connect(self._on_modo_linhas_changed)
+        ol_layout.addWidget(self.cmb_modo_linhas)
 
         form_traco = QFormLayout()
         form_traco.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         form_traco.setLabelAlignment(Qt.AlignLeft)
         form_traco.setHorizontalSpacing(8)
+        form_traco.setVerticalSpacing(6)
+
         self.spn_esp_linha = QDoubleSpinBox()
         self.spn_esp_linha.setRange(0.5, 5.0)
         self.spn_esp_linha.setSingleStep(0.1)
         self.spn_esp_linha.setValue(1.2)
         self.spn_esp_linha.valueChanged.connect(self._emit_change)
-        form_traco.addRow("Espessura (pt):", self.spn_esp_linha)
+
+        self.lbl_tam_marcador = QLabel("Tamanho Símbolo (pt):")
+        self.spn_tam_marcador = QDoubleSpinBox()
+        self.spn_tam_marcador.setRange(2.0, 15.0)
+        self.spn_tam_marcador.setSingleStep(0.5)
+        self.spn_tam_marcador.setValue(6.0)
+        self.spn_tam_marcador.valueChanged.connect(self._emit_change)
+
+        form_traco.addRow("Espessura Linha (pt):", self.spn_esp_linha)
+        form_traco.addRow(self.lbl_tam_marcador, self.spn_tam_marcador)
         ol_layout.addLayout(form_traco)
 
-        self.chk_marcadores = QCheckBox("Exibir marcadores geométricos nos pontos")
-        self.chk_linhas_distintas = QCheckBox("Traços distintos (Sólido / Tracejado / Pontilhado)")
-        for chk in (self.chk_marcadores, self.chk_linhas_distintas):
-            chk.toggled.connect(self._emit_change)
-            ol_layout.addWidget(chk)
+        self.chk_descritivo_legenda = QCheckBox("Exibir tipo na legenda (ex: Manhã (Bolinha))")
+        self.chk_descritivo_legenda.setChecked(True)
+        self.chk_descritivo_legenda.toggled.connect(self._emit_change)
+        ol_layout.addWidget(self.chk_descritivo_legenda)
+
+        # Painel Retrátil para Customização Avançada por Série
+        self.frame_custom_linhas = QFrame()
+        self.frame_custom_linhas.setStyleSheet("QFrame { background: rgba(0,0,0,0.02); border: 1px solid rgba(0,0,0,0.08); border-radius: 6px; padding: 4px; }")
+        fl_custom = QVBoxLayout(self.frame_custom_linhas)
+        fl_custom.setContentsMargins(6, 6, 6, 6)
+        fl_custom.setSpacing(6)
+
+        lbl_custom_tit = QLabel("<b>Ajuste Individual por Série:</b>")
+        fl_custom.addWidget(lbl_custom_tit)
+
+        grid_series = QGridLayout()
+        grid_series.setHorizontalSpacing(6)
+        grid_series.setVerticalSpacing(4)
+        grid_series.addWidget(QLabel("<b>Série</b>"), 0, 0)
+        grid_series.addWidget(QLabel("<b>Traçado</b>"), 0, 1)
+        grid_series.addWidget(QLabel("<b>Marcador</b>"), 0, 2)
+
+        self.cmb_traco_manha = QComboBox()
+        self.cmb_traco_tarde = QComboBox()
+        self.cmb_traco_noite = QComboBox()
+        for cmb in (self.cmb_traco_manha, self.cmb_traco_tarde, self.cmb_traco_noite):
+            for nome_t, cod_t in MAPA_TRACOS.items():
+                cmb.addItem(nome_t, cod_t)
+            cmb.currentIndexChanged.connect(self._emit_change)
+
+        self.cmb_simbolo_manha = QComboBox()
+        self.cmb_simbolo_tarde = QComboBox()
+        self.cmb_simbolo_noite = QComboBox()
+        for cmb in (self.cmb_simbolo_manha, self.cmb_simbolo_tarde, self.cmb_simbolo_noite):
+            for nome_s, cod_s in MAPA_SIMBOLOS.items():
+                cmb.addItem(nome_s, cod_s)
+            cmb.currentIndexChanged.connect(self._emit_change)
+
+        grid_series.addWidget(QLabel("Manhã:"), 1, 0)
+        grid_series.addWidget(self.cmb_traco_manha, 1, 1)
+        grid_series.addWidget(self.cmb_simbolo_manha, 1, 2)
+
+        grid_series.addWidget(QLabel("Tarde:"), 2, 0)
+        grid_series.addWidget(self.cmb_traco_tarde, 2, 1)
+        grid_series.addWidget(self.cmb_simbolo_tarde, 2, 2)
+
+        grid_series.addWidget(QLabel("Noite:"), 3, 0)
+        grid_series.addWidget(self.cmb_traco_noite, 3, 1)
+        grid_series.addWidget(self.cmb_simbolo_noite, 3, 2)
+
+        fl_custom.addLayout(grid_series)
+        self.frame_custom_linhas.setVisible(False)
+        ol_layout.addWidget(self.frame_custom_linhas)
+
+        # Checkboxes legados ocultos para retrocompatibilidade
+        self.chk_marcadores = QCheckBox()
+        self.chk_linhas_distintas = QCheckBox()
+
         l_estilo.addWidget(self.grp_opcoes_linhas)
 
         # Opções Barras
@@ -494,8 +569,33 @@ class SidebarControlsWidget(QScrollArea):
         self.btn_cor_de.set_color(cfg.get("cor_desvio_estacionamento", "#ffff99"))
         self.widget_cores_barras_custom.setVisible("Personalizada" in self.cmb_paleta_barras.currentText())
 
+        modo_linhas = cfg.get("modo_estilo_linhas")
+        if not modo_linhas:
+            if cfg.get("com_marcadores") and not cfg.get("com_linhas_distintas"):
+                modo_linhas = "Opção 1: Linha + Símbolo (Line + Symbol)"
+            elif cfg.get("com_linhas_distintas") and not cfg.get("com_marcadores"):
+                modo_linhas = "Opção 2: Estilos de Traçado (Dash Type)"
+            elif cfg.get("com_marcadores") and cfg.get("com_linhas_distintas"):
+                modo_linhas = "Personalizado (Avançado)"
+            else:
+                modo_linhas = "Linhas Contínuas Padrão"
+
+        self._set_combo_text(self.cmb_modo_linhas, modo_linhas)
         self.spn_esp_linha.setValue(float(cfg.get("espessura_linha", 1.2)))
-        self.chk_marcadores.setChecked(bool(cfg.get("com_marcadores", False)))
+        self.spn_tam_marcador.setValue(float(cfg.get("tamanho_marcador", 6.0)))
+        self.chk_descritivo_legenda.setChecked(bool(cfg.get("rotulos_descritivos_legenda", True)))
+
+        self._set_combo_data(self.cmb_traco_manha, cfg.get("traco_manha", "-"))
+        self._set_combo_data(self.cmb_traco_tarde, cfg.get("traco_tarde", "-"))
+        self._set_combo_data(self.cmb_traco_noite, cfg.get("traco_noite", "-"))
+
+        self._set_combo_data(self.cmb_simbolo_manha, cfg.get("marcador_manha", "o"))
+        self._set_combo_data(self.cmb_simbolo_tarde, cfg.get("marcador_tarde", "s"))
+        self._set_combo_data(self.cmb_simbolo_noite, cfg.get("marcador_noite", "^"))
+
+        self._atualizar_visibilidade_modo_linhas()
+
+        self.chk_marcadores.setChecked(bool(cfg.get("com_marcadores", True)))
         self.chk_linhas_distintas.setChecked(bool(cfg.get("com_linhas_distintas", False)))
         self.chk_grade.setChecked(bool(cfg.get("exibir_grade", False)))
         self.chk_grade_barras.setChecked(bool(cfg.get("exibir_grade", False)))
@@ -534,6 +634,7 @@ class SidebarControlsWidget(QScrollArea):
         exibir_grade = (
             self.chk_grade.isChecked() if self.tipo_grafico == "linhas" else self.chk_grade_barras.isChecked()
         )
+        modo_atual = self.cmb_modo_linhas.currentText()
         return {
             "opcao_fonte": self.cmb_fonte.currentText(),
             "tamanho_fonte": float(self.spn_tam_fonte.value()),
@@ -551,9 +652,18 @@ class SidebarControlsWidget(QScrollArea):
             "negrito_valores_barras": self.chk_negrito_barras.isChecked(),
             "largura_grupo_barras": float(self.spn_largura_grupo.value()),
             "espessura_linha": float(self.spn_esp_linha.value()),
-            "com_marcadores": self.chk_marcadores.isChecked(),
+            "modo_estilo_linhas": modo_atual,
+            "tamanho_marcador": float(self.spn_tam_marcador.value()),
+            "rotulos_descritivos_legenda": self.chk_descritivo_legenda.isChecked(),
+            "traco_manha": self.cmb_traco_manha.currentData() or "-",
+            "traco_tarde": self.cmb_traco_tarde.currentData() or "-",
+            "traco_noite": self.cmb_traco_noite.currentData() or "-",
+            "marcador_manha": self.cmb_simbolo_manha.currentData() or "o",
+            "marcador_tarde": self.cmb_simbolo_tarde.currentData() or "s",
+            "marcador_noite": self.cmb_simbolo_noite.currentData() or "^",
+            "com_marcadores": "Símbolo" in modo_atual or ("Personalizado" in modo_atual),
             "exibir_grade": exibir_grade,
-            "com_linhas_distintas": self.chk_linhas_distintas.isChecked(),
+            "com_linhas_distintas": "Traçado" in modo_atual or ("Personalizado" in modo_atual),
             "exibir_legenda": self.chk_exibir_leg.isChecked(),
             "moldura_legenda": self.chk_moldura_leg.isChecked(),
             "orientacao_leg": self.cmb_orient_leg.currentText(),
@@ -606,6 +716,25 @@ class SidebarControlsWidget(QScrollArea):
         idx = combo.findText(text)
         if idx >= 0:
             combo.setCurrentIndex(idx)
+
+    @staticmethod
+    def _set_combo_data(combo: QComboBox, data_val: str):
+        for i in range(combo.count()):
+            if str(combo.itemData(i)) == str(data_val):
+                combo.setCurrentIndex(i)
+                return
+
+    def _on_modo_linhas_changed(self):
+        self._atualizar_visibilidade_modo_linhas()
+        self._emit_change()
+
+    def _atualizar_visibilidade_modo_linhas(self):
+        modo = self.cmb_modo_linhas.currentText()
+        is_custom = "Personalizado" in modo
+        is_simbolo = "Símbolo" in modo or is_custom
+        self.spn_tam_marcador.setEnabled(is_simbolo)
+        self.lbl_tam_marcador.setEnabled(is_simbolo)
+        self.frame_custom_linhas.setVisible(is_custom)
 
     def _on_modo_toggled(self):
         if self._updating_ui:

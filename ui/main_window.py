@@ -488,11 +488,47 @@ class VesperaMainWindow(QMainWindow):
         }
 
         if self.tipo_grafico_atual == "linhas":
-            estilos_linhas = (
-                {"Manha": "-", "Tarde": "--", "Noite": ":"}
-                if cfg["com_linhas_distintas"]
-                else {"Manha": "-", "Tarde": "-", "Noite": "-"}
-            )
+            modo_linhas = cfg.get("modo_estilo_linhas", "Opção 1: Linha + Símbolo (Line + Symbol)")
+            descritivo = cfg.get("rotulos_descritivos_legenda", True)
+            tamanho_marcador = float(cfg.get("tamanho_marcador", 6.0))
+
+            if "Opção 1" in modo_linhas or (cfg.get("com_marcadores") and not cfg.get("com_linhas_distintas")):
+                estilos_linhas = {"Manha": "-", "Tarde": "-", "Noite": "-"}
+                com_marcadores = True
+                marcadores_map = {"Manha": "o", "Tarde": "s", "Noite": "^"}
+                rotulos_legenda = (
+                    {"Manha": "Manhã (Bolinha)", "Tarde": "Tarde (Quadrado)", "Noite": "Noite (Triângulo)"}
+                    if descritivo
+                    else {"Manha": "Manhã", "Tarde": "Tarde", "Noite": "Noite"}
+                )
+            elif "Opção 2" in modo_linhas or (cfg.get("com_linhas_distintas") and not cfg.get("com_marcadores")):
+                estilos_linhas = {"Manha": "--", "Tarde": "-", "Noite": ":"}
+                com_marcadores = False
+                marcadores_map = None
+                rotulos_legenda = (
+                    {"Manha": "Manhã (Tracejada)", "Tarde": "Tarde (Contínua)", "Noite": "Noite (Pontilhada)"}
+                    if descritivo
+                    else {"Manha": "Manhã", "Tarde": "Tarde", "Noite": "Noite"}
+                )
+            elif "Personalizado" in modo_linhas:
+                estilos_linhas = {
+                    "Manha": cfg.get("traco_manha", "-"),
+                    "Tarde": cfg.get("traco_tarde", "-"),
+                    "Noite": cfg.get("traco_noite", "-"),
+                }
+                marcadores_map = {
+                    "Manha": cfg.get("marcador_manha", "o"),
+                    "Tarde": cfg.get("marcador_tarde", "s"),
+                    "Noite": cfg.get("marcador_noite", "^"),
+                }
+                com_marcadores = any(v not in (None, "", "None") for v in marcadores_map.values())
+                rotulos_legenda = {"Manha": "Manhã", "Tarde": "Tarde", "Noite": "Noite"}
+            else:
+                estilos_linhas = {"Manha": "-", "Tarde": "-", "Noite": "-"}
+                com_marcadores = False
+                marcadores_map = None
+                rotulos_legenda = {"Manha": "Manhã", "Tarde": "Tarde", "Noite": "Noite"}
+
             renderizar_grafico_linhas(
                 df=df,
                 titulo_grafico=meta["titulo_grafico"],
@@ -506,12 +542,15 @@ class VesperaMainWindow(QMainWindow):
                 fonte_nome=cfg["opcao_fonte"],
                 tamanho_fonte=cfg["tamanho_fonte"],
                 espessura_linha=cfg["espessura_linha"],
-                com_marcadores=cfg["com_marcadores"],
+                com_marcadores=com_marcadores,
                 bordas_config=bordas_config,
                 ticks_config=ticks_config,
                 legenda_config=legenda_config,
                 exibir_grade=cfg["exibir_grade"],
                 fig=self.plot_widget.fig,
+                marcadores_map=marcadores_map,
+                rotulos_legenda=rotulos_legenda,
+                tamanho_marcador=tamanho_marcador,
             )
         else:
             renderizar_grafico_barras(

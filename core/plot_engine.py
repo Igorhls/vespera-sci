@@ -47,6 +47,9 @@ def renderizar_grafico_linhas(
     legenda_config: dict,
     exibir_grade: bool,
     fig=None,
+    marcadores_map: dict = None,
+    rotulos_legenda: dict = None,
+    tamanho_marcador: float = 6.0,
 ):
     """
     Renderiza o gráfico de linhas (Pontos P1..Pn) com controle milimétrico de tipografia,
@@ -66,23 +69,27 @@ def renderizar_grafico_linhas(
     pontos = df["Pontos"].astype(str).tolist()
     x_indices = np.arange(len(pontos))
 
-    marcadores_map = {"Manha": "o", "Tarde": "s", "Noite": "^"}
+    if marcadores_map is None:
+        marcadores_map = {"Manha": "o", "Tarde": "s", "Noite": "^"}
 
     for periodo in ["Manha", "Tarde", "Noite"]:
         if periodo in df.columns and periodo in series_ativas:
-            m = marcadores_map[periodo] if com_marcadores else None
+            m = marcadores_map.get(periodo) if com_marcadores else None
+            if m == "None" or not m:
+                m = None
             ls = estilos_linhas.get(periodo, "-")
             cor = cores_periodos.get(periodo, "#000000")
+            lbl = rotulos_legenda.get(periodo, periodo) if rotulos_legenda else periodo
 
             ax.plot(
                 x_indices,
                 pd.to_numeric(df[periodo], errors="coerce"),
-                label=periodo,
+                label=lbl,
                 color=cor,
                 linestyle=ls,
                 linewidth=espessura_linha,
                 marker=m,
-                markersize=5,
+                markersize=tamanho_marcador,
                 markeredgecolor=cor,
                 markerfacecolor="white" if com_marcadores and "Monocromático" in str(cores_periodos) else cor,
             )
@@ -186,8 +193,8 @@ def renderizar_grafico_linhas(
             facecolor="white",
             framealpha=1.0,
             fontsize=tamanho_fonte - 1.5,
-            handlelength=1.8,
-            handletextpad=0.5,
+            handlelength=2.4,
+            handletextpad=0.6,
             borderpad=0.55,
             columnspacing=1.5,
         )

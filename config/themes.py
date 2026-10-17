@@ -104,7 +104,16 @@ DEFAULT_CONFIG = {
     "negrito_valores_barras": True,
     "largura_grupo_barras": 0.68,
     "espessura_linha": 1.2,
-    "com_marcadores": False,
+    "modo_estilo_linhas": "Opção 1: Linha + Símbolo (Line + Symbol)",
+    "tamanho_marcador": 6.0,
+    "rotulos_descritivos_legenda": True,
+    "traco_manha": "-",
+    "traco_tarde": "-",
+    "traco_noite": "-",
+    "marcador_manha": "o",
+    "marcador_tarde": "s",
+    "marcador_noite": "^",
+    "com_marcadores": True,
     "exibir_grade": False,
     "com_linhas_distintas": False,
     "show_manha": True,
@@ -132,4 +141,27 @@ DEFAULT_CONFIG = {
     "minor_ticks": True,
     "cor_moldura": "#000000",
     "esp_moldura": 1.15,
+}
+
+MODOS_ESTILO_LINHAS = [
+    "Opção 1: Linha + Símbolo (Line + Symbol)",
+    "Opção 2: Estilos de Traçado (Dash Type)",
+    "Linhas Contínuas Padrão",
+    "Personalizado (Avançado)",
+]
+
+MAPA_SIMBOLOS = {
+    "Nenhum": "None",
+    "Bolinha / Círculo (●)": "o",
+    "Quadrado (■)": "s",
+    "Triângulo (▲)": "^",
+    "Losango (◆)": "D",
+    "Estrela (★)": "*",
+}
+
+MAPA_TRACOS = {
+    "Contínua (———)": "-",
+    "Tracejada (- - -)": "--",
+    "Pontilhada (······)": ":",
+    "Traço-Ponto (— · —)": "-.",
 }
