@@ -44,7 +44,8 @@ class VesperaMainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Vespera Sci Alpha — Scientific Plotting & Data Studio")
-        self.resize(1440, 900)
+        self.resize(1620, 880)
+        self.setMinimumSize(1580, 820)
 
         # Ícone oficial da janela e da barra de tarefas
         icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "app_icon.png")
@@ -274,9 +275,15 @@ class VesperaMainWindow(QMainWindow):
         self.splitter.setCollapsible(1, False)
         self.splitter.setCollapsible(2, False)
         self.splitter.setStretchFactor(0, 0)
-        self.splitter.setStretchFactor(1, 1)
+        self.splitter.setStretchFactor(1, 0)
         self.splitter.setStretchFactor(2, 1)
-        self.splitter.setSizes([310, 550, 580])
+        self.splitter.setSizes([320, 480, 800])
+
+        # Travar os divisores para que as janelas fiquem fixas e não sofram desajuste
+        for i in range(self.splitter.count()):
+            h = self.splitter.handle(i)
+            if h:
+                h.setEnabled(False)
 
         root_layout.addWidget(self.splitter, stretch=1)
 

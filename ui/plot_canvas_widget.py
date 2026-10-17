@@ -32,7 +32,7 @@ class PlotCanvasWidget(QWidget):
         self._updating_ui = False
         self.tipo_grafico = "linhas"
 
-        self.fig = Figure(figsize=(7.5, 4.8), dpi=125)
+        self.fig = Figure(figsize=(7.6, 4.8), dpi=100)
         self.canvas = FigureCanvasQTAgg(self.fig)
         self.toolbar = NavigationToolbar2QT(self.canvas, self)
 
@@ -95,12 +95,13 @@ class PlotCanvasWidget(QWidget):
         canvas_card = QFrame()
         canvas_card.setObjectName("cardPanel")
         cc_layout = QVBoxLayout(canvas_card)
-        cc_layout.setContentsMargins(4, 4, 4, 4)
-        cc_layout.setSpacing(4)
+        cc_layout.setContentsMargins(6, 6, 6, 6)
+        cc_layout.setSpacing(6)
+        cc_layout.setAlignment(Qt.AlignCenter)
 
-        self.canvas.setMinimumSize(480, 360)
-        cc_layout.addWidget(self.canvas, stretch=1)
-        cc_layout.addWidget(self.toolbar)
+        self.canvas.setFixedSize(760, 480)
+        cc_layout.addWidget(self.canvas, 0, Qt.AlignCenter)
+        cc_layout.addWidget(self.toolbar, 0, Qt.AlignCenter)
 
         layout.addWidget(canvas_card, stretch=1)
 
