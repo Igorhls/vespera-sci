@@ -114,7 +114,7 @@ DEFAULT_CONFIG = {
     "marcador_tarde": "s",
     "marcador_noite": "^",
     "com_marcadores": True,
-    "exibir_grade": False,
+    "exibir_grade": True,
     "com_linhas_distintas": False,
     "show_manha": True,
     "show_tarde": True,

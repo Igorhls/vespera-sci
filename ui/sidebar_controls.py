@@ -239,6 +239,11 @@ class SidebarControlsWidget(QScrollArea):
         self.chk_descritivo_legenda.toggled.connect(self._emit_change)
         ol_layout.addWidget(self.chk_descritivo_legenda)
 
+        self.chk_grade_estilo = QCheckBox("Exibir grade de fundo (Quadrados de apoio)")
+        self.chk_grade_estilo.setChecked(True)
+        self.chk_grade_estilo.toggled.connect(self._on_grade_estilo_toggled)
+        ol_layout.addWidget(self.chk_grade_estilo)
+
         # Painel Retrátil para Customização Avançada por Série
         self.frame_custom_linhas = QFrame()
         self.frame_custom_linhas.setStyleSheet("QFrame { background: rgba(0,0,0,0.02); border: 1px solid rgba(0,0,0,0.08); border-radius: 6px; padding: 4px; }")
@@ -402,10 +407,22 @@ class SidebarControlsWidget(QScrollArea):
         l_gticks.addLayout(form_ticks)
         l_eixos.addWidget(grp_ticks)
 
+        grp_grade = QGroupBox("Linhas de Grade (Grid de Apoio)")
+        l_grade = QVBoxLayout(grp_grade)
+        l_grade.setSpacing(6)
+        self.chk_grade = QCheckBox("Exibir grade de apoio (Linhas — Eixos X e Y)")
+        self.chk_grade.setChecked(True)
+        self.chk_grade.toggled.connect(self._on_grade_toggled)
+        self.chk_grade_barras = QCheckBox("Exibir grade horizontal (Barras)")
+        self.chk_grade_barras.toggled.connect(self._emit_change)
+        l_grade.addWidget(self.chk_grade)
+        l_grade.addWidget(self.chk_grade_barras)
+        l_eixos.addWidget(grp_grade)
+
         l_eixos.addStretch()
         self.tab_estilos.addTab(tab_eixos, get_icon("sliders", size=15), "Eixos")
 
-        # ABA 3: Legenda & Grade
+        # ABA 3: Legenda
         tab_legenda = QWidget()
         l_leg = QVBoxLayout(tab_legenda)
         l_leg.setContentsMargins(6, 8, 6, 8)
@@ -455,16 +472,6 @@ class SidebarControlsWidget(QScrollArea):
         form_leg.addRow("Coord. Y:", self.spn_leg_y)
         l_gleg.addLayout(form_leg)
         l_leg.addWidget(grp_leg)
-
-        grp_grade = QGroupBox("Linhas de Grade")
-        l_grade = QVBoxLayout(grp_grade)
-        l_grade.setSpacing(6)
-        self.chk_grade = QCheckBox("Exibir grade de apoio (Linhas)")
-        self.chk_grade_barras = QCheckBox("Exibir grade horizontal (Barras)")
-        for chk in (self.chk_grade, self.chk_grade_barras):
-            chk.toggled.connect(self._emit_change)
-            l_grade.addWidget(chk)
-        l_leg.addWidget(grp_grade)
 
         l_leg.addStretch()
         self.tab_estilos.addTab(tab_legenda, get_icon("tag", size=15), "Legenda")
@@ -597,8 +604,10 @@ class SidebarControlsWidget(QScrollArea):
 
         self.chk_marcadores.setChecked(bool(cfg.get("com_marcadores", True)))
         self.chk_linhas_distintas.setChecked(bool(cfg.get("com_linhas_distintas", False)))
-        self.chk_grade.setChecked(bool(cfg.get("exibir_grade", False)))
-        self.chk_grade_barras.setChecked(bool(cfg.get("exibir_grade", False)))
+        exibir_gr = bool(cfg.get("exibir_grade", DEFAULT_CONFIG.get("exibir_grade", True)))
+        self.chk_grade.setChecked(exibir_gr)
+        self.chk_grade_estilo.setChecked(exibir_gr)
+        self.chk_grade_barras.setChecked(exibir_gr)
 
         self.chk_exibir_valores_barras.setChecked(bool(cfg.get("exibir_valores_barras", True)))
         self.chk_negrito_barras.setChecked(bool(cfg.get("negrito_valores_barras", True)))
@@ -735,6 +744,20 @@ class SidebarControlsWidget(QScrollArea):
         self.spn_tam_marcador.setEnabled(is_simbolo)
         self.lbl_tam_marcador.setEnabled(is_simbolo)
         self.frame_custom_linhas.setVisible(is_custom)
+
+    def _on_grade_estilo_toggled(self, checked: bool):
+        if not self._updating_ui:
+            self._updating_ui = True
+            self.chk_grade.setChecked(checked)
+            self._updating_ui = False
+            self._emit_change()
+
+    def _on_grade_toggled(self, checked: bool):
+        if not self._updating_ui:
+            self._updating_ui = True
+            self.chk_grade_estilo.setChecked(checked)
+            self._updating_ui = False
+            self._emit_change()
 
     def _on_modo_toggled(self):
         if self._updating_ui:

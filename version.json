@@ -1,7 +1,7 @@
 {
-  "version": "1.2.0",
+  "version": "1.2.1",
   "release_date": "2026-10-17",
   "repo": "Igorhls/vespera-sci",
   "branch": "main",
-  "notes": "Vespera Sci Alpha — Customização avançada de linhas: Opção 1 (Linha + Símbolo), Opção 2 (Estilos de Traçado) e controle por série"
+  "notes": "Vespera Sci Alpha — Refinamento das linhas de grade (quadrados de apoio X e Y nítidos) e atalhos na barra lateral"
 }

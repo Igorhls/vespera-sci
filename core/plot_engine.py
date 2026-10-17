@@ -165,8 +165,18 @@ def renderizar_grafico_linhas(
     else:
         ax.yaxis.set_major_locator(ticker.MultipleLocator(2))
 
+    ax.set_axisbelow(True)
     if exibir_grade:
-        ax.grid(True, color="#e0e0e0", linestyle="--", linewidth=0.6)
+        ax.grid(
+            True,
+            which="major",
+            axis="both",
+            color="#cbd5e1",
+            linestyle="--",
+            linewidth=0.85,
+            alpha=0.85,
+            zorder=0,
+        )
     else:
         ax.grid(False)
 
@@ -363,8 +373,18 @@ def renderizar_grafico_barras(
             color=cor_borda,
         )
 
+    ax.set_axisbelow(True)
     if exibir_grade:
-        ax.grid(True, axis="y", color="#e0e0e0", linestyle="--", linewidth=0.6, zorder=0)
+        ax.grid(
+            True,
+            which="major",
+            axis="y",
+            color="#cbd5e1",
+            linestyle="--",
+            linewidth=0.85,
+            alpha=0.85,
+            zorder=0,
+        )
     else:
         ax.grid(False)
 
