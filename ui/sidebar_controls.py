@@ -99,6 +99,7 @@ class SidebarControlsWidget(QScrollArea):
     presetSelected = Signal(str)
     importSpreadsheetRequested = Signal()
     importProjectFileRequested = Signal()
+    hideRequested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -106,7 +107,7 @@ class SidebarControlsWidget(QScrollArea):
         self.tipo_grafico = "linhas"
         self.setWidgetResizable(True)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.setFixedWidth(260)
+        self.setMinimumWidth(300)
 
         self.container = QWidget()
         self.setWidget(self.container)
@@ -126,8 +127,20 @@ class SidebarControlsWidget(QScrollArea):
         tc_layout.setContentsMargins(10, 10, 10, 10)
         tc_layout.setSpacing(8)
 
+        header_top = QHBoxLayout()
+        header_top.setContentsMargins(0, 0, 0, 0)
         lbl_presets = QLabel("<b>Modelos e Presets</b>")
-        tc_layout.addWidget(lbl_presets)
+        header_top.addWidget(lbl_presets)
+        header_top.addStretch()
+
+        self.btn_hide = QPushButton("Ocultar")
+        self.btn_hide.setIcon(get_icon("sidebar", size=14))
+        self.btn_hide.setToolTip("Ocultar Painel Lateral (Ctrl+B)")
+        self.btn_hide.setCursor(Qt.PointingHandCursor)
+        self.btn_hide.clicked.connect(self.hideRequested.emit)
+        header_top.addWidget(self.btn_hide)
+
+        tc_layout.addLayout(header_top)
 
         self.cmb_presets = QComboBox()
         opcoes_preset = (

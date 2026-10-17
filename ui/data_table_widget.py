@@ -42,12 +42,13 @@ class DataTableWidget(QWidget):
     """Painel central moderno com abas separadas para dados, estatísticas e ferramentas."""
 
     dataOrMetaChanged = Signal()
+    hideRequested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._updating_ui = False
         self.tipo_grafico = "linhas"
-        self.setFixedWidth(580)
+        self.setMinimumWidth(460)
         self.df_linhas = pd.DataFrame(columns=["Pontos", "Manha", "Tarde", "Noite"])
         self.df_barras = pd.DataFrame(
             columns=["Mes", "Bosque", "Desvio_Bosque", "Estacionamento", "Desvio_Estacionamento"]
@@ -62,6 +63,13 @@ class DataTableWidget(QWidget):
 
         # Sistema de Abas Principal da Área de Dados
         self.tabs = QTabWidget()
+        self.btn_hide = QPushButton(" Ocultar")
+        self.btn_hide.setIcon(get_icon("x", size=13))
+        self.btn_hide.setToolTip("Ocultar Tabela de Dados (Ctrl+T)")
+        self.btn_hide.setCursor(Qt.PointingHandCursor)
+        self.btn_hide.clicked.connect(self.hideRequested.emit)
+        self.tabs.setCornerWidget(self.btn_hide, Qt.TopRightCorner)
+
         root_layout.addWidget(self.tabs, stretch=1)
 
         # ===================================================================

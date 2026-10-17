@@ -365,7 +365,10 @@ def build_qss(theme: dict) -> str:
     /* Splitter */
     QSplitter::handle {{
         background-color: {theme['border_subtle']};
-        width: 1px;
+        width: 3px;
+    }}
+    QSplitter::handle:hover {{
+        background-color: {theme['accent']};
     }}
 
     /* Status Bar */

@@ -26,13 +26,14 @@ class PlotCanvasWidget(QWidget):
 
     seriesVisibilityChanged = Signal()
     exportExcelRequested = Signal(str)
+    hideRequested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._updating_ui = False
         self.tipo_grafico = "linhas"
 
-        self.fig = Figure(figsize=(9.2, 5.8), dpi=100)
+        self.fig = Figure(figsize=(8.5, 5.3), dpi=100)
         self.canvas = FigureCanvasQTAgg(self.fig)
         self.toolbar = NavigationToolbar2QT(self.canvas, self)
 
@@ -82,6 +83,13 @@ class PlotCanvasWidget(QWidget):
         )
         series_layout.addWidget(lbl_dica)
 
+        self.btn_hide = QPushButton(" Ocultar")
+        self.btn_hide.setIcon(get_icon("x", size=13))
+        self.btn_hide.setToolTip("Ocultar Área do Gráfico (Ctrl+G)")
+        self.btn_hide.setCursor(Qt.PointingHandCursor)
+        self.btn_hide.clicked.connect(self.hideRequested.emit)
+        series_layout.addWidget(self.btn_hide)
+
         layout.addWidget(self.frame_series)
 
         # 2. Canvas Principal em Card Moderno
@@ -92,7 +100,7 @@ class PlotCanvasWidget(QWidget):
         cc_layout.setSpacing(6)
         cc_layout.setAlignment(Qt.AlignCenter)
 
-        self.canvas.setFixedSize(920, 580)
+        self.canvas.setFixedSize(850, 530)
         cc_layout.addWidget(self.canvas, 0, Qt.AlignCenter)
         cc_layout.addWidget(self.toolbar, 0, Qt.AlignCenter)
 
