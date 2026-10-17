@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from config.presets import PRESETS_BARRAS, PRESETS_LINHAS
+from config.presets import PRESETS_BARRAS, PRESETS_DISPERSAO, PRESETS_LINHAS
 from config.themes import (
     COORDENADAS_LEGENDA_PRESET,
     DEFAULT_CONFIG,
@@ -37,6 +37,7 @@ from config.themes import (
     MODOS_ESTILO_LINHAS,
     PALETAS_BARRAS,
     PALETAS_BARRAS_HACHURAS,
+    PALETAS_DISPERSAO,
     PALETAS_LINHAS,
     POSICOES_LEGENDA,
 )
@@ -149,9 +150,14 @@ class SidebarControlsWidget(QScrollArea):
         self.cmb_presets = QComboBox()
         opcoes_preset = (
             ["Carregar modelo pré-cadastrado..."]
+            + list(PRESETS_DISPERSAO.keys())
             + list(PRESETS_LINHAS.keys())
             + list(PRESETS_BARRAS.keys())
-            + ["Criar Novo — Linhas (Pontos P1–P10)", "Criar Novo — Barras (Média e Desvio)"]
+            + [
+                "Criar Novo — Dispersão (X vs Y)",
+                "Criar Novo — Linhas (Pontos P1–P10)",
+                "Criar Novo — Barras (Média e Desvio)",
+            ]
         )
         self.cmb_presets.addItems(opcoes_preset)
         self.cmb_presets.currentIndexChanged.connect(self._on_preset_chosen)
@@ -376,6 +382,81 @@ class SidebarControlsWidget(QScrollArea):
         self.grp_opcoes_barras.setVisible(False)
         l_estilo.addWidget(self.grp_opcoes_barras)
 
+        # Opções Dispersão e Regressão
+        self.grp_opcoes_dispersao = QGroupBox("Opções de Dispersão e Regressão")
+        od_layout = QVBoxLayout(self.grp_opcoes_dispersao)
+        od_layout.setSpacing(6)
+
+        self.chk_exibir_reta = QCheckBox("Exibir Linha de Regressão (Tendência)")
+        self.chk_exibir_reta.setChecked(True)
+        self.chk_exibir_r2 = QCheckBox("Exibir Coeficiente R² no Gráfico")
+        self.chk_exibir_r2.setChecked(True)
+        self.chk_exibir_equacao = QCheckBox("Exibir Equação da Reta (y = ax + b)")
+        self.chk_exibir_equacao.setChecked(False)
+        self.chk_exibir_banda = QCheckBox("Exibir Intervalo de Confiança (IC 95%)")
+        self.chk_exibir_banda.setChecked(False)
+        self.chk_rotulos_pontos = QCheckBox("Exibir Rótulos nos Pontos (P1..Pn)")
+        self.chk_rotulos_pontos.setChecked(False)
+
+        for chk in (
+            self.chk_exibir_reta,
+            self.chk_exibir_r2,
+            self.chk_exibir_equacao,
+            self.chk_exibir_banda,
+            self.chk_rotulos_pontos,
+        ):
+            chk.toggled.connect(self._emit_change)
+            od_layout.addWidget(chk)
+
+        form_disp = QFormLayout()
+        form_disp.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        form_disp.setLabelAlignment(Qt.AlignLeft)
+        form_disp.setHorizontalSpacing(8)
+        form_disp.setVerticalSpacing(6)
+
+        self.cmb_estilo_reta = QComboBox()
+        for nome_t, cod_t in MAPA_TRACOS.items():
+            self.cmb_estilo_reta.addItem(nome_t, cod_t)
+        self._set_combo_data(self.cmb_estilo_reta, ":")
+        self.cmb_estilo_reta.currentIndexChanged.connect(self._emit_change)
+
+        self.spn_esp_reta = QDoubleSpinBox()
+        self.spn_esp_reta.setRange(0.5, 6.0)
+        self.spn_esp_reta.setSingleStep(0.2)
+        self.spn_esp_reta.setValue(1.8)
+        self.spn_esp_reta.valueChanged.connect(self._emit_change)
+
+        self.cmb_simbolo_pontos = QComboBox()
+        for nome_s, cod_s in MAPA_SIMBOLOS.items():
+            if cod_s != "None":
+                self.cmb_simbolo_pontos.addItem(nome_s, cod_s)
+        self.cmb_simbolo_pontos.currentIndexChanged.connect(self._emit_change)
+
+        self.spn_tam_pontos = QDoubleSpinBox()
+        self.spn_tam_pontos.setRange(2.0, 20.0)
+        self.spn_tam_pontos.setSingleStep(0.5)
+        self.spn_tam_pontos.setValue(7.0)
+        self.spn_tam_pontos.valueChanged.connect(self._emit_change)
+
+        self.cmb_posicao_r2 = QComboBox()
+        self.cmb_posicao_r2.addItems([
+            "Junto à Reta (Superior)",
+            "Superior Direito (Caixa)",
+            "Superior Esquerdo (Caixa)",
+            "Inferior Direito (Caixa)",
+        ])
+        self.cmb_posicao_r2.currentIndexChanged.connect(self._emit_change)
+
+        form_disp.addRow("Traço da Reta:", self.cmb_estilo_reta)
+        form_disp.addRow("Espessura Reta (pt):", self.spn_esp_reta)
+        form_disp.addRow("Símbolo dos Pontos:", self.cmb_simbolo_pontos)
+        form_disp.addRow("Tamanho Pontos (pt):", self.spn_tam_pontos)
+        form_disp.addRow("Posição do R²:", self.cmb_posicao_r2)
+        od_layout.addLayout(form_disp)
+
+        self.grp_opcoes_dispersao.setVisible(False)
+        l_estilo.addWidget(self.grp_opcoes_dispersao)
+
         l_estilo.addStretch()
         self.tab_estilos.addTab(tab_estilo, get_icon("type", size=15), "Estilo")
 
@@ -471,6 +552,17 @@ class SidebarControlsWidget(QScrollArea):
         )
         self.spn_intervalo_ticks_y.valueChanged.connect(self._emit_change)
 
+        self.spn_intervalo_ticks_x = QDoubleSpinBox()
+        self.spn_intervalo_ticks_x.setRange(0.0, 500.0)
+        self.spn_intervalo_ticks_x.setSingleStep(0.5)
+        self.spn_intervalo_ticks_x.setDecimals(1)
+        self.spn_intervalo_ticks_x.setValue(0.0)
+        self.spn_intervalo_ticks_x.setSpecialValueText("Automático (Auto)")
+        self.spn_intervalo_ticks_x.setToolTip("Espaçamento numérico entre cada traço principal (tick) do eixo X no gráfico de dispersão.")
+        self.spn_intervalo_ticks_x.valueChanged.connect(self._emit_change)
+
+        self.lbl_form_tick_x = QLabel("Intervalo X (Passo):")
+        form_ticks.addRow(self.lbl_form_tick_x, self.spn_intervalo_ticks_x)
         form_ticks.addRow("Intervalo Y (Passo):", self.spn_intervalo_ticks_y)
         form_ticks.addRow("Direção:", self.cmb_dir_ticks)
         form_ticks.addRow("Espessura:", self.spn_esp_moldura)
@@ -486,8 +578,12 @@ class SidebarControlsWidget(QScrollArea):
         self.chk_grade.toggled.connect(self._on_grade_toggled)
         self.chk_grade_barras = QCheckBox("Exibir grade horizontal (Barras)")
         self.chk_grade_barras.toggled.connect(self._emit_change)
+        self.chk_grade_dispersao = QCheckBox("Exibir grade de apoio (Dispersão)")
+        self.chk_grade_dispersao.setChecked(True)
+        self.chk_grade_dispersao.toggled.connect(self._emit_change)
         l_grade.addWidget(self.chk_grade)
         l_grade.addWidget(self.chk_grade_barras)
+        l_grade.addWidget(self.chk_grade_dispersao)
         l_eixos.addWidget(grp_grade)
 
         l_eixos.addStretch()
@@ -630,6 +726,34 @@ class SidebarControlsWidget(QScrollArea):
         self.grp_cores_barras.setVisible(False)
         l_cores.addWidget(self.grp_cores_barras)
 
+        # Paleta Dispersão e Regressão
+        self.grp_cores_dispersao = QGroupBox("Paleta de Cores — Dispersão")
+        cd_layout = QVBoxLayout(self.grp_cores_dispersao)
+        cd_layout.setSpacing(6)
+
+        self.cmb_paleta_dispersao = QComboBox()
+        self.cmb_paleta_dispersao.addItems(list(PALETAS_DISPERSAO.keys()) + ["Personalizada (Definir manualmente)"])
+        self.cmb_paleta_dispersao.currentIndexChanged.connect(self._on_paleta_dispersao_changed)
+        cd_layout.addWidget(self.cmb_paleta_dispersao)
+
+        self.widget_cores_dispersao_custom = QWidget()
+        vl_cd_custom = QVBoxLayout(self.widget_cores_dispersao_custom)
+        vl_cd_custom.setContentsMargins(0, 4, 0, 0)
+        vl_cd_custom.setSpacing(6)
+
+        self.btn_cor_pontos = ColorButton("#5b9bd5", "Cor dos Pontos")
+        self.btn_cor_borda_pontos = ColorButton("#41719c", "Borda dos Pontos")
+        self.btn_cor_reta = ColorButton("#3b82f6", "Cor da Linha")
+
+        for b in (self.btn_cor_pontos, self.btn_cor_borda_pontos, self.btn_cor_reta):
+            b.colorChanged.connect(self._emit_change)
+            vl_cd_custom.addWidget(b)
+
+        self.widget_cores_dispersao_custom.setVisible(False)
+        cd_layout.addWidget(self.widget_cores_dispersao_custom)
+        self.grp_cores_dispersao.setVisible(False)
+        l_cores.addWidget(self.grp_cores_dispersao)
+
         l_cores.addStretch()
         self.tab_estilos.addTab(tab_cores, get_icon("palette", size=15), "Cores")
 
@@ -637,17 +761,26 @@ class SidebarControlsWidget(QScrollArea):
         self._updating_ui = True
         self.tipo_grafico = tipo_grafico
         is_linhas = tipo_grafico == "linhas"
+        is_barras = tipo_grafico == "barras"
+        is_dispersao = tipo_grafico == "dispersao"
 
         self.rb_linhas.setChecked(is_linhas)
-        self.rb_barras.setChecked(not is_linhas)
+        self.rb_barras.setChecked(is_barras)
 
         self.grp_cores_linhas.setVisible(is_linhas)
         self.grp_opcoes_linhas.setVisible(is_linhas)
         self.chk_grade.setVisible(is_linhas)
 
-        self.grp_cores_barras.setVisible(not is_linhas)
-        self.grp_opcoes_barras.setVisible(not is_linhas)
-        self.chk_grade_barras.setVisible(not is_linhas)
+        self.grp_cores_barras.setVisible(is_barras)
+        self.grp_opcoes_barras.setVisible(is_barras)
+        self.chk_grade_barras.setVisible(is_barras)
+
+        self.grp_cores_dispersao.setVisible(is_dispersao)
+        self.grp_opcoes_dispersao.setVisible(is_dispersao)
+        self.chk_grade_dispersao.setVisible(is_dispersao)
+
+        self.lbl_form_tick_x.setVisible(is_dispersao)
+        self.spn_intervalo_ticks_x.setVisible(is_dispersao)
         self._updating_ui = False
 
     def carregar_config(self, cfg: dict, tipo_grafico: str = "linhas"):
@@ -677,6 +810,31 @@ class SidebarControlsWidget(QScrollArea):
         self._set_hachura_combo(self.cmb_hachura_estac, cfg.get("hachura_estacionamento"))
         self._set_hachura_combo(self.cmb_hachura_de, cfg.get("hachura_desvio_estacionamento"))
         self.widget_cores_barras_custom.setVisible("Personalizada" in self.cmb_paleta_barras.currentText())
+
+        # Dispersão
+        self._set_combo_text(
+            self.cmb_paleta_dispersao,
+            cfg.get("opcao_paleta_dispersao", DEFAULT_CONFIG.get("opcao_paleta_dispersao", "Azul Científico (Padrão Excel/OriginLab)")),
+        )
+        self.btn_cor_pontos.set_color(cfg.get("cor_pontos_dispersao", "#5b9bd5"))
+        self.btn_cor_borda_pontos.set_color(cfg.get("cor_borda_pontos_dispersao", "#41719c"))
+        self.btn_cor_reta.set_color(cfg.get("cor_reta_dispersao", "#3b82f6"))
+        self.widget_cores_dispersao_custom.setVisible("Personalizada" in self.cmb_paleta_dispersao.currentText())
+
+        self.chk_exibir_reta.setChecked(bool(cfg.get("exibir_reta_dispersao", True)))
+        self.chk_exibir_r2.setChecked(bool(cfg.get("exibir_r2_dispersao", True)))
+        self.chk_exibir_equacao.setChecked(bool(cfg.get("exibir_equacao_dispersao", False)))
+        self.chk_exibir_banda.setChecked(bool(cfg.get("exibir_banda_dispersao", False)))
+        self.chk_rotulos_pontos.setChecked(bool(cfg.get("exibir_rotulos_pontos_dispersao", False)))
+
+        self._set_combo_data(self.cmb_estilo_reta, cfg.get("estilo_reta_dispersao", ":"))
+        self.spn_esp_reta.setValue(float(cfg.get("espessura_reta_dispersao", 1.8)))
+        self._set_combo_data(self.cmb_simbolo_pontos, cfg.get("marcador_pontos_dispersao", "o"))
+        self.spn_tam_pontos.setValue(float(cfg.get("tamanho_pontos_dispersao", 7.0)))
+        self._set_combo_text(self.cmb_posicao_r2, cfg.get("posicao_r2_dispersao", "Junto à Reta (Superior)"))
+
+        self.spn_intervalo_ticks_x.setValue(float(cfg.get("intervalo_ticks_x", 0.0)))
+        self.chk_grade_dispersao.setChecked(bool(cfg.get("exibir_grade", True)))
 
         modo_linhas = cfg.get("modo_estilo_linhas")
         if not modo_linhas:
@@ -747,9 +905,13 @@ class SidebarControlsWidget(QScrollArea):
         self._updating_ui = False
 
     def obter_config(self) -> dict:
-        exibir_grade = (
-            self.chk_grade.isChecked() if self.tipo_grafico == "linhas" else self.chk_grade_barras.isChecked()
-        )
+        if self.tipo_grafico == "linhas":
+            exibir_grade = self.chk_grade.isChecked()
+        elif self.tipo_grafico == "barras":
+            exibir_grade = self.chk_grade_barras.isChecked()
+        else:
+            exibir_grade = self.chk_grade_dispersao.isChecked()
+
         modo_atual = self.cmb_modo_linhas.currentText()
         return {
             "opcao_fonte": self.cmb_fonte.currentText(),
@@ -801,12 +963,28 @@ class SidebarControlsWidget(QScrollArea):
             "cor_moldura": self.btn_cor_moldura.get_color(),
             "esp_moldura": float(self.spn_esp_moldura.value()),
             "intervalo_ticks_y": float(self.spn_intervalo_ticks_y.value()),
+            "intervalo_ticks_x": float(self.spn_intervalo_ticks_x.value()),
             "rotulo_x": self.txt_rotulo_x.text(),
             "rotulo_y": self.txt_rotulo_y.text(),
             "hachura_bosque": MAPA_HACHURAS.get(self.cmb_hachura_bosque.currentText()),
             "hachura_desvio_bosque": MAPA_HACHURAS.get(self.cmb_hachura_db.currentText()),
             "hachura_estacionamento": MAPA_HACHURAS.get(self.cmb_hachura_estac.currentText()),
             "hachura_desvio_estacionamento": MAPA_HACHURAS.get(self.cmb_hachura_de.currentText()),
+            # Dispersão
+            "opcao_paleta_dispersao": self.cmb_paleta_dispersao.currentText(),
+            "cor_pontos_dispersao": self.btn_cor_pontos.get_color(),
+            "cor_borda_pontos_dispersao": self.btn_cor_borda_pontos.get_color(),
+            "cor_reta_dispersao": self.btn_cor_reta.get_color(),
+            "estilo_reta_dispersao": self.cmb_estilo_reta.currentData() or ":",
+            "espessura_reta_dispersao": float(self.spn_esp_reta.value()),
+            "marcador_pontos_dispersao": self.cmb_simbolo_pontos.currentData() or "o",
+            "tamanho_pontos_dispersao": float(self.spn_tam_pontos.value()),
+            "exibir_reta_dispersao": self.chk_exibir_reta.isChecked(),
+            "exibir_r2_dispersao": self.chk_exibir_r2.isChecked(),
+            "exibir_equacao_dispersao": self.chk_exibir_equacao.isChecked(),
+            "exibir_banda_dispersao": self.chk_exibir_banda.isChecked(),
+            "exibir_rotulos_pontos_dispersao": self.chk_rotulos_pontos.isChecked(),
+            "posicao_r2_dispersao": self.cmb_posicao_r2.currentText(),
         }
 
     def obter_cores_linhas_ativas(self) -> dict:
@@ -914,6 +1092,33 @@ class SidebarControlsWidget(QScrollArea):
             self._set_hachura_combo(self.cmb_hachura_de, h.get("Desvio_Estacionamento"))
             self._updating_ui = False
         self._emit_change()
+
+    def _on_paleta_dispersao_changed(self):
+        paleta = self.cmb_paleta_dispersao.currentText()
+        is_custom = "Personalizada" in paleta
+        self.widget_cores_dispersao_custom.setVisible(is_custom)
+        if not is_custom and paleta in PALETAS_DISPERSAO:
+            c = PALETAS_DISPERSAO[paleta]
+            self._updating_ui = True
+            self.btn_cor_pontos.set_color(c.get("pontos", "#5b9bd5"))
+            self.btn_cor_borda_pontos.set_color(c.get("borda_pontos", "#41719c"))
+            self.btn_cor_reta.set_color(c.get("reta", "#3b82f6"))
+            self._updating_ui = False
+        self._emit_change()
+
+    def obter_cores_dispersao_ativas(self) -> dict:
+        paleta = self.cmb_paleta_dispersao.currentText()
+        if "Personalizada" not in paleta and paleta in PALETAS_DISPERSAO:
+            d = PALETAS_DISPERSAO[paleta].copy()
+            if "ic" not in d:
+                d["ic"] = d.get("reta", "#3b82f6")
+            return d
+        return {
+            "pontos": self.btn_cor_pontos.get_color(),
+            "borda_pontos": self.btn_cor_borda_pontos.get_color(),
+            "reta": self.btn_cor_reta.get_color(),
+            "ic": self.btn_cor_reta.get_color(),
+        }
 
     def obter_hachuras_barras_ativas(self) -> dict:
         paleta = self.cmb_paleta_barras.currentText()

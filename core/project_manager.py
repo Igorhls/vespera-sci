@@ -61,6 +61,13 @@ class ProjectManager:
                         None if pd.isna(row.get("Desvio_Estacionamento")) else float(row.get("Desvio_Estacionamento"))
                     ),
                 })
+        elif tipo_grafico == "dispersao":
+            for _, row in df_clean.iterrows():
+                registros.append({
+                    "Ponto": str(row.get("Ponto", "")),
+                    "X": None if pd.isna(row.get("X")) else float(row.get("X")),
+                    "Y": None if pd.isna(row.get("Y")) else float(row.get("Y")),
+                })
         else:
             for _, row in df_clean.iterrows():
                 registros.append({

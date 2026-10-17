@@ -28,11 +28,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from config.presets import PRESETS_BARRAS
+from config.presets import PRESETS_BARRAS, PRESETS_DISPERSAO
 from core.sanitizer import (
     calcular_estatisticas_serie,
+    calcular_regressao_linear,
     formatar_numero_ptbr,
     sanitizar_dados_barras,
+    sanitizar_dados_dispersao,
     sanitizar_dados_tabela,
 )
 from ui.icons import get_icon
@@ -53,6 +55,7 @@ class DataTableWidget(QWidget):
         self.df_barras = pd.DataFrame(
             columns=["Mes", "Bosque", "Desvio_Bosque", "Estacionamento", "Desvio_Estacionamento"]
         )
+        self.df_dispersao = pd.DataFrame(columns=["Ponto", "X", "Y"])
 
         self._build_ui()
 
@@ -148,6 +151,49 @@ class DataTableWidget(QWidget):
 
         grid_meta.addWidget(QLabel("<b>Passo Ticks (Y):</b>"), 2, 2)
         grid_meta.addWidget(self.spn_intervalo_ticks_y, 2, 3)
+
+        # Controles de Limites X e Ticks X (visíveis no Modo Dispersão)
+        self.lbl_lim_x = QLabel("<b>Limites X:</b>")
+        self.spn_min_x = QDoubleSpinBox()
+        self.spn_min_x.setRange(-1000.0, 5000.0)
+        self.spn_min_x.setDecimals(1)
+        self.spn_min_x.setSingleStep(1.0)
+        self.spn_min_x.valueChanged.connect(self._on_meta_changed)
+
+        self.spn_max_x = QDoubleSpinBox()
+        self.spn_max_x.setRange(-1000.0, 5000.0)
+        self.spn_max_x.setDecimals(1)
+        self.spn_max_x.setSingleStep(1.0)
+        self.spn_max_x.valueChanged.connect(self._on_meta_changed)
+
+        self.spn_intervalo_ticks_x = QDoubleSpinBox()
+        self.spn_intervalo_ticks_x.setRange(0.0, 500.0)
+        self.spn_intervalo_ticks_x.setDecimals(1)
+        self.spn_intervalo_ticks_x.setSingleStep(0.5)
+        self.spn_intervalo_ticks_x.setValue(0.0)
+        self.spn_intervalo_ticks_x.setSpecialValueText("Automático")
+        self.spn_intervalo_ticks_x.setToolTip("Espaçamento dos números/ticks no eixo X (0 = Automático).")
+        self.spn_intervalo_ticks_x.valueChanged.connect(self._on_meta_changed)
+
+        self.lbl_ticks_x = QLabel("<b>Passo Ticks (X):</b>")
+        self.widget_lim_x = QWidget()
+        lim_x_layout = QHBoxLayout(self.widget_lim_x)
+        lim_x_layout.setContentsMargins(0, 0, 0, 0)
+        lim_x_layout.setSpacing(6)
+        lim_x_layout.addWidget(QLabel("Mín:"))
+        lim_x_layout.addWidget(self.spn_min_x)
+        lim_x_layout.addWidget(QLabel("Máx:"))
+        lim_x_layout.addWidget(self.spn_max_x)
+
+        grid_meta.addWidget(self.lbl_lim_x, 3, 0)
+        grid_meta.addWidget(self.widget_lim_x, 3, 1)
+        grid_meta.addWidget(self.lbl_ticks_x, 3, 2)
+        grid_meta.addWidget(self.spn_intervalo_ticks_x, 3, 3)
+
+        self.lbl_lim_x.setVisible(False)
+        self.widget_lim_x.setVisible(False)
+        self.lbl_ticks_x.setVisible(False)
+        self.spn_intervalo_ticks_x.setVisible(False)
 
         layout_dados.addWidget(meta_card)
 
@@ -383,20 +429,33 @@ class DataTableWidget(QWidget):
         self._updating_ui = True
         self.tipo_grafico = tipo_grafico
         is_linhas = tipo_grafico == "linhas"
+        is_barras = tipo_grafico == "barras"
+        is_dispersao = tipo_grafico == "dispersao"
 
-        self.grp_rotulos_barras.setVisible(not is_linhas)
+        self.grp_rotulos_barras.setVisible(is_barras)
         self.lbl_destino.setVisible(is_linhas)
         self.cmb_destino_colar.setVisible(is_linhas)
+
+        self.lbl_lim_x.setVisible(is_dispersao)
+        self.widget_lim_x.setVisible(is_dispersao)
+        self.lbl_ticks_x.setVisible(is_dispersao)
+        self.spn_intervalo_ticks_x.setVisible(is_dispersao)
 
         if is_linhas:
             self.lbl_tit_dia.setText("<b>Identificador / Dia:</b>")
             self.btn_renum.setText("Renumerar")
             self.txt_paste.setPlaceholderText("Cole aqui os dados copiados do Excel...")
-        else:
+        elif is_barras:
             self.lbl_tit_dia.setText("<b>Cabeçalho / Variável:</b>")
             self.btn_renum.setText("Restaurar Modelo TA")
             self.txt_paste.setPlaceholderText(
                 "Agosto\t27,32\t2,3\t28,5\t4,87\nDezembro\t28,6\t1,42\t29,4\t2,19"
+            )
+        else:
+            self.lbl_tit_dia.setText("<b>Título / Variáveis:</b>")
+            self.btn_renum.setText("Renumerar Pontos (P1..Pn)")
+            self.txt_paste.setPlaceholderText(
+                "Cole dados de 2 colunas (X e Y) ou 3 colunas (Ponto, X, Y):\n34,2\t35,4\n34,7\t36,4\n34,9\t36,4\n..."
             )
 
         self._updating_ui = False
@@ -417,16 +476,36 @@ class DataTableWidget(QWidget):
         self.tipo_grafico = tipo_grafico
         if tipo_grafico == "linhas":
             self.df_linhas = df.copy()
-        else:
+        elif tipo_grafico == "barras":
             self.df_barras = df.copy()
+        else:
+            self.df_dispersao = df.copy()
 
         self.txt_titulo_dia.setText(str(titulo_dia or ""))
         self.txt_titulo_grafico.setText(str(titulo_grafico or ""))
-        self.txt_rotulo_x.setText(str(cfg.get("rotulo_x", "Pontos")))
+        self.txt_rotulo_x.setText(str(cfg.get("rotulo_x", "Pontos" if tipo_grafico == "linhas" else ("TA" if tipo_grafico == "barras" else "URA (%)"))))
         self.txt_rotulo_y.setText(str(cfg.get("rotulo_y", "Temperatura do ar (°C)")))
-        self.spn_min_y.setValue(float(min_y if min_y is not None else 24.0))
-        self.spn_max_y.setValue(float(max_y if max_y is not None else 33.0))
+        self.spn_min_y.setValue(float(min_y if min_y is not None else (34.5 if tipo_grafico == "dispersao" else 24.0)))
+        self.spn_max_y.setValue(float(max_y if max_y is not None else (38.0 if tipo_grafico == "dispersao" else 33.0)))
         self.spn_intervalo_ticks_y.setValue(float(cfg.get("intervalo_ticks_y", 0.0)))
+
+        min_x_val = cfg.get("min_x")
+        max_x_val = cfg.get("max_x")
+        if min_x_val is not None:
+            self.spn_min_x.setValue(float(min_x_val))
+        elif tipo_grafico == "dispersao" and "X" in df.columns and len(df["X"].dropna()) > 0:
+            self.spn_min_x.setValue(float(df["X"].dropna().min()))
+        else:
+            self.spn_min_x.setValue(34.0)
+
+        if max_x_val is not None:
+            self.spn_max_x.setValue(float(max_x_val))
+        elif tipo_grafico == "dispersao" and "X" in df.columns and len(df["X"].dropna()) > 0:
+            self.spn_max_x.setValue(float(df["X"].dropna().max()))
+        else:
+            self.spn_max_x.setValue(37.0)
+
+        self.spn_intervalo_ticks_x.setValue(float(cfg.get("intervalo_ticks_x", 0.0)))
 
         self.txt_rs1.setText(str(cfg.get("rotulo_s1", "Bosque")))
         self.txt_rs2.setText(str(cfg.get("rotulo_s2", "Desvio/p")))
@@ -446,7 +525,7 @@ class DataTableWidget(QWidget):
             colunas_internas = ["Pontos", "Manha", "Tarde", "Noite"]
             cabecalhos = ["Pontos", "Manhã (°C)", "Tarde (°C)", "Noite (°C)"]
             fmt_dec = "{:.1f}"
-        else:
+        elif self.tipo_grafico == "barras":
             df = self.df_barras
             colunas_internas = ["Mes", "Bosque", "Desvio_Bosque", "Estacionamento", "Desvio_Estacionamento"]
             cabecalhos = [
@@ -456,6 +535,13 @@ class DataTableWidget(QWidget):
                 self.txt_rs3.text() or "Estacionamento",
                 self.txt_rs4.text() or "Desvio/p",
             ]
+            fmt_dec = "{:.2f}"
+        else:
+            df = self.df_dispersao
+            colunas_internas = ["Ponto", "X", "Y"]
+            nom_x = self.txt_rotulo_x.text().strip() or "X"
+            nom_y = self.txt_rotulo_y.text().strip() or "Y"
+            cabecalhos = ["Ponto", f"X ({nom_x})", f"Y ({nom_y})"]
             fmt_dec = "{:.2f}"
 
         self.table.setColumnCount(len(colunas_internas))
@@ -485,8 +571,10 @@ class DataTableWidget(QWidget):
         rows = self.table.rowCount()
         if self.tipo_grafico == "linhas":
             colunas = ["Pontos", "Manha", "Tarde", "Noite"]
-        else:
+        elif self.tipo_grafico == "barras":
             colunas = ["Mes", "Bosque", "Desvio_Bosque", "Estacionamento", "Desvio_Estacionamento"]
+        else:
+            colunas = ["Ponto", "X", "Y"]
 
         dados = []
         for r in range(rows):
@@ -495,7 +583,8 @@ class DataTableWidget(QWidget):
                 item = self.table.item(r, c)
                 txt = item.text().strip() if item else ""
                 if c == 0:
-                    linha[col_name] = txt or (f"P{r+1}" if self.tipo_grafico == "linhas" else f"Mês {r+1}")
+                    padrao_id = f"P{r+1}" if self.tipo_grafico in ["linhas", "dispersao"] else f"Mês {r+1}"
+                    linha[col_name] = txt or padrao_id
                 else:
                     if not txt:
                         linha[col_name] = np.nan
@@ -511,13 +600,22 @@ class DataTableWidget(QWidget):
             df_san, _ = sanitizar_dados_tabela(df_lido)
             self.df_linhas = df_san
             return df_san
-        else:
+        elif self.tipo_grafico == "barras":
             df_san, _ = sanitizar_dados_barras(df_lido)
             self.df_barras = df_san
             return df_san
+        else:
+            df_san, _ = sanitizar_dados_dispersao(df_lido)
+            self.df_dispersao = df_san
+            return df_san
 
     def obter_dataframe_atual(self) -> pd.DataFrame:
-        return self.df_linhas.copy() if self.tipo_grafico == "linhas" else self.df_barras.copy()
+        if self.tipo_grafico == "linhas":
+            return self.df_linhas.copy()
+        elif self.tipo_grafico == "barras":
+            return self.df_barras.copy()
+        else:
+            return self.df_dispersao.copy()
 
     def obter_metadados(self) -> dict:
         return {
@@ -528,6 +626,9 @@ class DataTableWidget(QWidget):
             "min_y": float(self.spn_min_y.value()),
             "max_y": float(self.spn_max_y.value()),
             "intervalo_ticks_y": float(self.spn_intervalo_ticks_y.value()),
+            "min_x": float(self.spn_min_x.value()),
+            "max_x": float(self.spn_max_x.value()),
+            "intervalo_ticks_x": float(self.spn_intervalo_ticks_x.value()),
             "rotulo_s1": self.txt_rs1.text() or "Bosque",
             "rotulo_s2": self.txt_rs2.text() or "Desvio/p",
             "rotulo_s3": self.txt_rs3.text() or "Estacionamento",
@@ -567,7 +668,7 @@ class DataTableWidget(QWidget):
                 [{"Pontos": f"P{len(df)+1}", "Manha": 25.0, "Tarde": 29.0, "Noite": 26.0}]
             )
             self.df_linhas = pd.concat([df, novo], ignore_index=True)
-        else:
+        elif self.tipo_grafico == "barras":
             novo = pd.DataFrame([
                 {
                     "Mes": f"Mês {len(df)+1}",
@@ -578,6 +679,9 @@ class DataTableWidget(QWidget):
                 }
             ])
             self.df_barras = pd.concat([df, novo], ignore_index=True)
+        else:
+            novo = pd.DataFrame([{"Ponto": f"P{len(df)+1}", "X": 35.0, "Y": 36.0}])
+            self.df_dispersao = pd.concat([df, novo], ignore_index=True)
 
         self._popular_tabela()
         self.atualizar_sumario_estatistico()
@@ -592,8 +696,10 @@ class DataTableWidget(QWidget):
         df_novo = df.drop(df.index[idx_remover]).reset_index(drop=True)
         if self.tipo_grafico == "linhas":
             self.df_linhas = df_novo
-        else:
+        elif self.tipo_grafico == "barras":
             self.df_barras = df_novo
+        else:
+            self.df_dispersao = df_novo
 
         self._popular_tabela()
         self.atualizar_sumario_estatistico()
@@ -604,10 +710,15 @@ class DataTableWidget(QWidget):
             df = self._ler_dataframe_da_tabela()
             df["Pontos"] = [f"P{i+1}" for i in range(len(df))]
             self.df_linhas = df
-        else:
+        elif self.tipo_grafico == "barras":
             self.df_barras = PRESETS_BARRAS["TA — Média e Desvio Padrão (Agosto e Dezembro)"]["df"].copy()
             self.spn_min_y.setValue(0.0)
             self.spn_max_y.setValue(35.0)
+        else:
+            df = self._ler_dataframe_da_tabela()
+            col_p = "Ponto" if "Ponto" in df.columns else df.columns[0]
+            df[col_p] = [f"P{i+1}" for i in range(len(df))]
+            self.df_dispersao = df
 
         self._popular_tabela()
         self.atualizar_sumario_estatistico()
@@ -696,7 +807,7 @@ class DataTableWidget(QWidget):
 
             self.df_linhas, _ = sanitizar_dados_tabela(df_temp)
 
-        else:
+        elif self.tipo_grafico == "barras":
             novas_b = []
             for l in linhas_raw:
                 partes = [p.strip().replace(",", ".") for p in l.replace(";", "\t").split("\t")]
@@ -724,6 +835,29 @@ class DataTableWidget(QWidget):
                     columns=["Mes", "Bosque", "Desvio_Bosque", "Estacionamento", "Desvio_Estacionamento"],
                 )
                 self.df_barras, _ = sanitizar_dados_barras(df_b)
+
+        else:
+            novas_disp = []
+            for l in linhas_raw:
+                partes = [p.strip().replace(",", ".") for p in l.replace(";", "\t").split("\t") if p.strip()]
+                if len(partes) >= 3:
+                    p_nom = partes[0]
+                    try:
+                        vx = float(partes[1])
+                        vy = float(partes[2])
+                        novas_disp.append({"Ponto": p_nom, "X": vx, "Y": vy})
+                    except ValueError:
+                        pass
+                elif len(partes) == 2:
+                    try:
+                        vx = float(partes[0])
+                        vy = float(partes[1])
+                        novas_disp.append({"Ponto": f"P{len(novas_disp)+1}", "X": vx, "Y": vy})
+                    except ValueError:
+                        pass
+            if novas_disp:
+                df_disp = pd.DataFrame(novas_disp)
+                self.df_dispersao, _ = sanitizar_dados_dispersao(df_disp)
 
         self._popular_tabela()
         self.atualizar_sumario_estatistico()
@@ -768,7 +902,7 @@ class DataTableWidget(QWidget):
                             f"Amplitude = <b>{est['amplitude']:.1f} °C</b> (N={est['n']})"
                         )
             self.lbl_stats.setText("<br><br>".join(blocos) if blocos else "Sem dados numéricos na tabela.")
-        else:
+        elif self.tipo_grafico == "barras":
             linhas_txt = []
             r1 = self.txt_rs1.text() or "Bosque"
             r3 = self.txt_rs3.text() or "Estacionamento"
@@ -780,3 +914,29 @@ class DataTableWidget(QWidget):
                 de = formatar_numero_ptbr(row.get("Desvio_Estacionamento"))
                 linhas_txt.append(f"<b>{mes}:</b> {r1} = <b>{vb} (±{db})</b> &nbsp;|&nbsp; {r3} = <b>{ve} (±{de})</b>")
             self.lbl_stats.setText("<br><br>".join(linhas_txt) if linhas_txt else "Sem dados na tabela.")
+        else:
+            col_x = "X" if "X" in self.df_dispersao.columns else self.df_dispersao.columns[1]
+            col_y = "Y" if "Y" in self.df_dispersao.columns else self.df_dispersao.columns[2]
+            nom_x = self.txt_rotulo_x.text().strip() or "X"
+            nom_y = self.txt_rotulo_y.text().strip() or "Y"
+            reg = calcular_regressao_linear(self.df_dispersao[col_x], self.df_dispersao[col_y]) if len(self.df_dispersao) >= 2 else {}
+            if reg:
+                txt = (
+                    f"<div style='line-height: 1.6;'>"
+                    f"<b style='font-size: 13px; color: #1e293b;'>Regressão Linear & Coeficiente de Determinação (R²):</b><br>"
+                    f"• <b>Equação da Reta:</b> <span style='color: #2563eb; font-weight: bold;'>{reg['equacao']}</span><br>"
+                    f"• <b>Coeficiente de Determinação (R²):</b> <span style='color: #059669; font-weight: bold;'>{reg['r2_formatado']}</span> "
+                    f"({reg['r2']*100:.1f}% da variação de {nom_y} é explicada por {nom_x})<br>"
+                    f"• <b>Correlação de Pearson (r):</b> <b>{reg['r_formatado']}</b> &nbsp;|&nbsp; Relação <b>{reg['forca']} {reg['direcao']}</b><br>"
+                    f"• <b>Erro Padrão da Estimativa (Se):</b> {reg['se']:.4f} &nbsp;|&nbsp; <b>Pares Válidos (N):</b> {reg['n']}<br><br>"
+                    f"<b>Estatísticas das Variáveis:</b><br>"
+                    f"• <b>Variável X ({nom_x}):</b> Média = <b>{reg['media_x']:.2f}</b> (±{reg['desvio_x']:.2f}) &nbsp;|&nbsp; [Mín: {reg['min_x']:.2f} | Máx: {reg['max_x']:.2f}]<br>"
+                    f"• <b>Variável Y ({nom_y}):</b> Média = <b>{reg['media_y']:.2f}</b> (±{reg['desvio_y']:.2f}) &nbsp;|&nbsp; [Mín: {reg['min_y']:.2f} | Máx: {reg['max_y']:.2f}]<br><br>"
+                    f"<div style='background-color: #f1f5f9; border-left: 4px solid #3b82f6; padding: 8px 12px; border-radius: 4px; color: #1e293b;'>"
+                    f"<b>Interpretação Científica:</b> {reg['interpretacao']}</div>"
+                    f"</div>"
+                )
+                self.lbl_stats.setText(txt)
+            else:
+                self.lbl_stats.setText("Insira ao menos 2 pares de dados numéricos (X e Y) na tabela para calcular a Regressão Linear e o R².")
+

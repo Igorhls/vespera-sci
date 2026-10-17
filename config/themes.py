@@ -60,6 +60,35 @@ PALETAS_BARRAS = {
     },
 }
 
+# Paletas de cores para Gráfico de Dispersão e Regressão Linear (R²)
+PALETAS_DISPERSAO = {
+    "Azul Científico (Padrão Excel/OriginLab)": {
+        "pontos": "#5b9bd5",
+        "borda_pontos": "#41719c",
+        "reta": "#41719c",
+    },
+    "OriginLab Clássico (Azul Escuro & Vermelho)": {
+        "pontos": "#1f77b4",
+        "borda_pontos": "#0e4369",
+        "reta": "#d62728",
+    },
+    "Verde Bosque & Vegetação": {
+        "pontos": "#2ca02c",
+        "borda_pontos": "#1b611b",
+        "reta": "#1b611b",
+    },
+    "Laranja Térmico / Estacionamento": {
+        "pontos": "#d95f02",
+        "borda_pontos": "#8c3b00",
+        "reta": "#7570b3",
+    },
+    "Monocromático Acadêmico (Preto e Cinza)": {
+        "pontos": "#333333",
+        "borda_pontos": "#000000",
+        "reta": "#000000",
+    },
+}
+
 PALETAS_BARRAS_HACHURAS = {
     "OriginLab Hachurado (Verde, Cinza, Laranja //, Branco ..)": {
         "Bosque": None,
@@ -207,6 +236,26 @@ DEFAULT_CONFIG = {
     "hachura_desvio_estacionamento": "Pontilhado / Pontos (..)",
     "espaco_subgrupos_barras": 0.35,
     "espaco_barras": 0.0,
+    "opcao_paleta_dispersao": "Azul Científico (Padrão Excel/OriginLab)",
+    "cor_pontos_dispersao": "#5b9bd5",
+    "cor_borda_pontos_dispersao": "#41719c",
+    "cor_reta_dispersao": "#41719c",
+    "estilo_reta_dispersao": ":",
+    "espessura_reta_dispersao": 1.8,
+    "marcador_pontos_dispersao": "o",
+    "tamanho_pontos_dispersao": 6.5,
+    "exibir_reta_dispersao": True,
+    "exibir_r2_dispersao": True,
+    "exibir_equacao_dispersao": False,
+    "exibir_banda_dispersao": False,
+    "exibir_rotulos_pontos_dispersao": False,
+    "posicao_r2_dispersao": "Junto à Reta (Superior)",
+    "intervalo_ticks_x": 0.0,
+    "min_x_dispersao": None,
+    "max_x_dispersao": None,
+    "show_pontos_dispersao": True,
+    "show_reta_dispersao": True,
+    "show_r2_dispersao": True,
 }
 
 MODOS_ESTILO_LINHAS = [

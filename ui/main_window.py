@@ -27,10 +27,18 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from config.presets import PRESETS_BARRAS, PRESETS_LINHAS
+from config.presets import PRESETS_BARRAS, PRESETS_DISPERSAO, PRESETS_LINHAS
 from config.themes import DEFAULT_CONFIG
-from core.excel_exporter import gerar_excel_barras_bytes, gerar_excel_linhas_bytes
-from core.plot_engine import renderizar_grafico_barras, renderizar_grafico_linhas
+from core.excel_exporter import (
+    gerar_excel_barras_bytes,
+    gerar_excel_dispersao_bytes,
+    gerar_excel_linhas_bytes,
+)
+from core.plot_engine import (
+    renderizar_grafico_barras,
+    renderizar_grafico_dispersao,
+    renderizar_grafico_linhas,
+)
 from core.project_manager import ProjectManager
 from ui.data_table_widget import DataTableWidget
 from ui.icons import get_icon
@@ -225,8 +233,15 @@ class VesperaMainWindow(QMainWindow):
         self.btn_modo_barras.setCursor(Qt.PointingHandCursor)
         self.btn_modo_barras.clicked.connect(lambda: self._alternar_modo("barras"))
 
+        self.btn_modo_dispersao = QPushButton("Dispersão (Regressão R²)")
+        self.btn_modo_dispersao.setIcon(get_icon("chart-scatter", size=16))
+        self.btn_modo_dispersao.setObjectName("btnSegment")
+        self.btn_modo_dispersao.setCursor(Qt.PointingHandCursor)
+        self.btn_modo_dispersao.clicked.connect(lambda: self._alternar_modo("dispersao"))
+
         header_layout.addWidget(self.btn_modo_linhas)
         header_layout.addWidget(self.btn_modo_barras)
+        header_layout.addWidget(self.btn_modo_dispersao)
 
         header_layout.addStretch()
 
@@ -391,22 +406,20 @@ class VesperaMainWindow(QMainWindow):
             self.status_bar.showMessage("Pronto. Selecione um modelo ou edite os valores na matriz de dados.")
 
     def _atualizar_botoes_modo(self):
-        if self.tipo_grafico_atual == "linhas":
-            self.btn_modo_linhas.setObjectName("btnSegmentActive")
-            self.btn_modo_barras.setObjectName("btnSegment")
-        else:
-            self.btn_modo_linhas.setObjectName("btnSegment")
-            self.btn_modo_barras.setObjectName("btnSegmentActive")
-        self.style().unpolish(self.btn_modo_linhas)
-        self.style().polish(self.btn_modo_linhas)
-        self.style().unpolish(self.btn_modo_barras)
-        self.style().polish(self.btn_modo_barras)
+        self.btn_modo_linhas.setObjectName("btnSegmentActive" if self.tipo_grafico_atual == "linhas" else "btnSegment")
+        self.btn_modo_barras.setObjectName("btnSegmentActive" if self.tipo_grafico_atual == "barras" else "btnSegment")
+        self.btn_modo_dispersao.setObjectName("btnSegmentActive" if self.tipo_grafico_atual == "dispersao" else "btnSegment")
+        for btn in (self.btn_modo_linhas, self.btn_modo_barras, self.btn_modo_dispersao):
+            self.style().unpolish(btn)
+            self.style().polish(btn)
 
     def _alternar_modo(self, novo_modo: str):
         if novo_modo == self.tipo_grafico_atual:
             return
         if novo_modo == "barras":
             self._carregar_preset("Ta (°C) — Média e Desvio Padrão (Modelo OriginLab da Pesquisa)")
+        elif novo_modo == "dispersao":
+            self._carregar_preset("BOSQUE — URA x Ta (Regressão R² = 0,334)")
         else:
             self._carregar_preset("Dia 14 de Agosto")
 
@@ -448,6 +461,42 @@ class VesperaMainWindow(QMainWindow):
             titulo_dia = p["titulo_dia"]
             titulo_grafico = p["titulo_grafico"]
             min_y, max_y = p["min_y"], p["max_y"]
+
+        elif nome_preset in PRESETS_DISPERSAO:
+            p = PRESETS_DISPERSAO[nome_preset]
+            self.tipo_grafico_atual = "dispersao"
+            self.nome_projeto_atual = p.get("nome_projeto", "Dispersão URA x Ta")
+            cfg["rotulo_x"] = p["rotulo_x"]
+            cfg["rotulo_y"] = p["rotulo_y"]
+            cfg["rotulo_s1"] = p.get("rotulo_s1", "Pontos Experimentais")
+            cfg["rotulo_s2"] = p.get("rotulo_s2", "Reta de Ajuste Linear")
+            cfg["opcao_fonte"] = "Arial (Científico Internacional)"
+            cfg["direcao_ticks"] = "Para fora (out)"
+            cfg["ticks_topo"] = True
+            cfg["ticks_dir"] = True
+            if "config" in p:
+                cfg.update(p["config"])
+            df_alvo = p["df"].copy()
+            titulo_dia = p["titulo_dia"]
+            titulo_grafico = p["titulo_grafico"]
+            min_y, max_y = p["min_y"], p["max_y"]
+
+        elif nome_preset == "Criar Novo — Dispersão (X vs Y)":
+            self.tipo_grafico_atual = "dispersao"
+            self.nome_projeto_atual = "Novo Projeto - Dispersão"
+            cfg["rotulo_x"] = "Variável X"
+            cfg["rotulo_y"] = "Variável Y"
+            cfg["direcao_ticks"] = "Para fora (out)"
+            cfg["ticks_topo"] = True
+            cfg["ticks_dir"] = True
+            df_alvo = pd.DataFrame({
+                "Ponto": [f"P{i}" for i in range(1, 11)],
+                "X": [10.0 + i for i in range(10)],
+                "Y": [20.0 + i * 1.5 for i in range(10)],
+            })
+            titulo_dia = "X vs Y"
+            titulo_grafico = "DISPERSÃO X vs Y"
+            min_y, max_y = 15.0, 40.0
 
         elif nome_preset == "Criar Novo — Barras (Média e Desvio)":
             self.tipo_grafico_atual = "barras"
@@ -501,13 +550,28 @@ class VesperaMainWindow(QMainWindow):
         self.nome_projeto_atual = proj_dict.get("nome_projeto", proj_dict.get("titulo_dia", "Meu Projeto"))
         self.txt_nome_projeto.setText(self.nome_projeto_atual)
 
-        titulo_dia = proj_dict.get("titulo_dia", "TA" if tipo == "barras" else "Dia 14 de agosto")
-        titulo_grafico = proj_dict.get("titulo_grafico", "" if tipo == "barras" else "DIA 14 DE AGOSTO - BOSQUE")
-        min_y = float(proj_dict.get("min_y", 0.0 if tipo == "barras" else 24.0))
-        max_y = float(proj_dict.get("max_y", 35.0 if tipo == "barras" else 33.0))
+        default_tit = "BOSQUE URA x Ta" if tipo == "dispersao" else ("TA" if tipo == "barras" else "Dia 14 de agosto")
+        default_graf = "BOSQUE URA x Ta" if tipo == "dispersao" else ("" if tipo == "barras" else "DIA 14 DE AGOSTO - BOSQUE")
+        default_min_y = 34.5 if tipo == "dispersao" else (0.0 if tipo == "barras" else 24.0)
+        default_max_y = 38.0 if tipo == "dispersao" else (35.0 if tipo == "barras" else 33.0)
+
+        titulo_dia = proj_dict.get("titulo_dia", default_tit)
+        titulo_grafico = proj_dict.get("titulo_grafico", default_graf)
+        min_y = float(proj_dict.get("min_y", default_min_y))
+        max_y = float(proj_dict.get("max_y", default_max_y))
 
         registros = proj_dict.get("dados", [])
-        if tipo == "barras":
+        if tipo == "dispersao":
+            if registros:
+                df_loaded = pd.DataFrame(registros)
+                cols_d = ["Ponto", "X", "Y"]
+                for col in cols_d:
+                    if col not in df_loaded.columns:
+                        df_loaded[col] = np.nan if col != "Ponto" else ""
+                df_alvo = df_loaded[cols_d].copy()
+            else:
+                df_alvo = PRESETS_DISPERSAO["BOSQUE — URA x Ta (Regressão R² = 0,334)"]["df"].copy()
+        elif tipo == "barras":
             if registros:
                 df_loaded = pd.DataFrame(registros)
                 cols_b = ["Mes", "Bosque", "Desvio_Bosque", "Estacionamento", "Desvio_Estacionamento"]
@@ -544,6 +608,12 @@ class VesperaMainWindow(QMainWindow):
             self.table_widget.spn_intervalo_ticks_y.setValue(side_passo)
             self.table_widget.spn_intervalo_ticks_y.blockSignals(False)
 
+        side_passo_x = self.sidebar.spn_intervalo_ticks_x.value()
+        if abs(self.table_widget.spn_intervalo_ticks_x.value() - side_passo_x) > 1e-4:
+            self.table_widget.spn_intervalo_ticks_x.blockSignals(True)
+            self.table_widget.spn_intervalo_ticks_x.setValue(side_passo_x)
+            self.table_widget.spn_intervalo_ticks_x.blockSignals(False)
+
         if self.sidebar.txt_rotulo_x.text() != self.table_widget.txt_rotulo_x.text():
             self.table_widget.txt_rotulo_x.blockSignals(True)
             self.table_widget.txt_rotulo_x.setText(self.sidebar.txt_rotulo_x.text())
@@ -568,6 +638,12 @@ class VesperaMainWindow(QMainWindow):
             self.sidebar.spn_intervalo_ticks_y.blockSignals(True)
             self.sidebar.spn_intervalo_ticks_y.setValue(meta_passo)
             self.sidebar.spn_intervalo_ticks_y.blockSignals(False)
+
+        meta_passo_x = self.table_widget.spn_intervalo_ticks_x.value()
+        if abs(self.sidebar.spn_intervalo_ticks_x.value() - meta_passo_x) > 1e-4:
+            self.sidebar.spn_intervalo_ticks_x.blockSignals(True)
+            self.sidebar.spn_intervalo_ticks_x.setValue(meta_passo_x)
+            self.sidebar.spn_intervalo_ticks_x.blockSignals(False)
 
         if self.table_widget.txt_rotulo_x.text() != self.sidebar.txt_rotulo_x.text():
             self.sidebar.txt_rotulo_x.blockSignals(True)
@@ -618,6 +694,7 @@ class VesperaMainWindow(QMainWindow):
             "direcao": "in" if "dentro" in cfg["direcao_ticks"] else "out",
             "minor_ticks": cfg["minor_ticks"],
             "intervalo_y": float(cfg.get("intervalo_ticks_y", 0.0)),
+            "intervalo_x": float(cfg.get("intervalo_ticks_x", 0.0)),
         }
         legenda_config = {
             "exibir": cfg["exibir_legenda"],
@@ -693,6 +770,42 @@ class VesperaMainWindow(QMainWindow):
                 rotulos_legenda=rotulos_legenda,
                 tamanho_marcador=tamanho_marcador,
             )
+        elif self.tipo_grafico_atual == "dispersao":
+            cores_disp = self.sidebar.obter_cores_dispersao_ativas()
+            series_ativas = self.plot_widget.obter_series_dispersao_ativas()
+            renderizar_grafico_dispersao(
+                df=df,
+                titulo_grafico=meta["titulo_grafico"],
+                rotulo_x=meta["rotulo_x"],
+                rotulo_y=meta["rotulo_y"],
+                min_x=meta.get("min_x", 0.0),
+                max_x=meta.get("max_x", 0.0),
+                min_y=meta["min_y"],
+                max_y=meta["max_y"],
+                fonte_nome=cfg["opcao_fonte"],
+                tamanho_fonte=cfg["tamanho_fonte"],
+                cor_pontos=cores_disp.get("pontos", "#5b9bd5"),
+                cor_borda_pontos=cores_disp.get("borda_pontos", "#41719c"),
+                marcador_pontos=cfg.get("marcador_pontos_dispersao", "o"),
+                tamanho_pontos=float(cfg.get("tamanho_pontos_dispersao", 7.0)),
+                exibir_pontos=series_ativas.get("pontos", True),
+                exibir_reta=series_ativas.get("reta", True) and cfg.get("exibir_reta_dispersao", True),
+                cor_reta=cores_disp.get("reta", "#3b82f6"),
+                estilo_reta=cfg.get("estilo_reta_dispersao", ":"),
+                espessura_reta=float(cfg.get("espessura_reta_dispersao", 1.8)),
+                exibir_r2=series_ativas.get("r2", True) and cfg.get("exibir_r2_dispersao", True),
+                exibir_equacao=cfg.get("exibir_equacao_dispersao", False),
+                exibir_banda=cfg.get("exibir_banda_dispersao", False),
+                exibir_rotulos_pontos=cfg.get("exibir_rotulos_pontos_dispersao", False),
+                posicao_r2=cfg.get("posicao_r2_dispersao", "Junto à Reta (Superior)"),
+                bordas_config=bordas_config,
+                ticks_config=ticks_config,
+                legenda_config=legenda_config,
+                exibir_grade=cfg["exibir_grade"],
+                fig=self.plot_widget.fig,
+                intervalo_ticks_x=float(cfg.get("intervalo_ticks_x", 0.0)),
+                intervalo_ticks_y=float(cfg.get("intervalo_ticks_y", 0.0)),
+            )
         else:
             renderizar_grafico_barras(
                 df=df,
@@ -752,7 +865,8 @@ class VesperaMainWindow(QMainWindow):
         projetos = self.banco_projetos.get("projetos", {})
         self.cmb_projetos_salvos.addItem(f"Projetos salvos ({len(projetos)})...", None)
         for nome, p in projetos.items():
-            tipo_str = "Barras" if p.get("tipo_grafico") == "barras" else "Linhas"
+            tipo_p = p.get("tipo_grafico")
+            tipo_str = "Dispersão" if tipo_p == "dispersao" else ("Barras" if tipo_p == "barras" else "Linhas")
             data_str = p.get("atualizado_em", "")
             self.cmb_projetos_salvos.addItem(f"{nome} [{tipo_str}] ({data_str})", nome)
         self._updating_project_combo = False
@@ -869,12 +983,13 @@ class VesperaMainWindow(QMainWindow):
 
             df_mapped = df_up.rename(columns=col_map)
             cols_req = ["Pontos", "Manha", "Tarde", "Noite"]
+            nome_base = os.path.splitext(os.path.basename(caminho))[0]
+            cfg = self.sidebar.obter_config()
+
             if all(c in df_mapped.columns for c in cols_req):
                 self.tipo_grafico_atual = "linhas"
-                nome_base = os.path.splitext(os.path.basename(caminho))[0]
                 self.nome_projeto_atual = nome_base
                 self.txt_nome_projeto.setText(nome_base)
-                cfg = self.sidebar.obter_config()
                 self.table_widget.carregar_dados_e_meta(
                     "linhas",
                     df_mapped[cols_req].copy(),
@@ -886,12 +1001,56 @@ class VesperaMainWindow(QMainWindow):
                 )
                 self._atualizar_botoes_modo()
                 self.atualizar_grafico()
-                self.status_bar.showMessage(f"Planilha '{os.path.basename(caminho)}' importada com sucesso.")
+                self.status_bar.showMessage(f"Planilha '{os.path.basename(caminho)}' importada com sucesso (Linhas).")
+            elif len(df_up.columns) in (2, 3):
+                # Importar como dispersão X vs Y
+                if len(df_up.columns) == 2:
+                    df_disp = pd.DataFrame({
+                        "Ponto": [f"P{i+1}" for i in range(len(df_up))],
+                        "X": pd.to_numeric(df_up.iloc[:, 0].astype(str).str.replace(",", "."), errors="coerce"),
+                        "Y": pd.to_numeric(df_up.iloc[:, 1].astype(str).str.replace(",", "."), errors="coerce"),
+                    })
+                    col_x_name = str(df_up.columns[0])
+                    col_y_name = str(df_up.columns[1])
+                else:
+                    df_disp = pd.DataFrame({
+                        "Ponto": df_up.iloc[:, 0].astype(str),
+                        "X": pd.to_numeric(df_up.iloc[:, 1].astype(str).str.replace(",", "."), errors="coerce"),
+                        "Y": pd.to_numeric(df_up.iloc[:, 2].astype(str).str.replace(",", "."), errors="coerce"),
+                    })
+                    col_x_name = str(df_up.columns[1])
+                    col_y_name = str(df_up.columns[2])
+
+                self.tipo_grafico_atual = "dispersao"
+                self.nome_projeto_atual = nome_base
+                self.txt_nome_projeto.setText(nome_base)
+                cfg["rotulo_x"] = col_x_name
+                cfg["rotulo_y"] = col_y_name
+                min_x = float(np.nanfloor(df_disp["X"].min())) if not df_disp["X"].isna().all() else 0.0
+                max_x = float(np.nanceil(df_disp["X"].max())) if not df_disp["X"].isna().all() else 10.0
+                min_y = float(np.nanfloor(df_disp["Y"].min())) if not df_disp["Y"].isna().all() else 0.0
+                max_y = float(np.nanceil(df_disp["Y"].max())) if not df_disp["Y"].isna().all() else 10.0
+                self.sidebar.carregar_config(cfg, "dispersao")
+                self.table_widget.carregar_dados_e_meta(
+                    "dispersao",
+                    df_disp,
+                    nome_base,
+                    f"{col_x_name} x {col_y_name}",
+                    min_y,
+                    max_y,
+                    cfg,
+                    min_x=min_x,
+                    max_x=max_x,
+                )
+                self._atualizar_botoes_modo()
+                self.atualizar_grafico()
+                self.status_bar.showMessage(f"Planilha '{os.path.basename(caminho)}' importada com sucesso (Dispersão X vs Y).")
             else:
                 QMessageBox.warning(
                     self,
-                    "Colunas Não Encontradas",
-                    "A planilha deve conter as colunas: Pontos, Manha, Tarde e Noite.",
+                    "Colunas Não Reconhecidas",
+                    "A planilha deve conter 4 colunas para Linhas (Pontos, Manha, Tarde, Noite) "
+                    "ou 2 a 3 colunas para Dispersão (Ponto, X, Y).",
                 )
         except Exception as e:
             QMessageBox.critical(self, "Erro ao Ler Planilha", str(e))
@@ -905,6 +1064,18 @@ class VesperaMainWindow(QMainWindow):
                     df=df,
                     titulo_dia=meta["titulo_dia"],
                     titulo_grafico=meta["titulo_grafico"],
+                    min_y=meta["min_y"],
+                    max_y=meta["max_y"],
+                )
+            elif self.tipo_grafico_atual == "dispersao":
+                excel_bytes = gerar_excel_dispersao_bytes(
+                    df=df,
+                    titulo_tabela=meta["titulo_dia"],
+                    titulo_grafico=meta["titulo_grafico"],
+                    rotulo_x=meta["rotulo_x"],
+                    rotulo_y=meta["rotulo_y"],
+                    min_x=meta.get("min_x", 0.0),
+                    max_x=meta.get("max_x", 0.0),
                     min_y=meta["min_y"],
                     max_y=meta["max_y"],
                 )

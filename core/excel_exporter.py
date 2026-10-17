@@ -5,9 +5,11 @@ Exportação de tabelas formatadas e gráficos nativos do Microsoft Excel (.xlsx
 import io
 import numpy as np
 import openpyxl
-from openpyxl.chart import BarChart, LineChart, Reference
-from openpyxl.styles import Alignment, Border, Font, Side
+from openpyxl.chart import BarChart, LineChart, Reference, ScatterChart, Series
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 import pandas as pd
+
+from core.sanitizer import calcular_regressao_linear
 
 
 def gerar_excel_linhas_bytes(
@@ -190,3 +192,146 @@ def gerar_excel_barras_bytes(
     wb.save(buf)
     buf.seek(0)
     return buf.getvalue()
+
+
+def gerar_excel_dispersao_bytes(
+    df: pd.DataFrame,
+    titulo_tabela: str,
+    titulo_grafico: str,
+    rotulo_x: str,
+    rotulo_y: str,
+    min_x: float = None,
+    max_x: float = None,
+    min_y: float = None,
+    max_y: float = None,
+) -> bytes:
+    """Gera a planilha Excel (.xlsx) com matriz de dados de dispersão e sumário estatístico."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Dispersão e R²"
+
+    borda_fina = Border(
+        left=Side(style="thin", color="A6A6A6"),
+        right=Side(style="thin", color="A6A6A6"),
+        top=Side(style="thin", color="A6A6A6"),
+        bottom=Side(style="thin", color="A6A6A6"),
+    )
+    fill_cabecalho = PatternFill(start_color="F2F4F7", end_color="F2F4F7", fill_type="solid")
+    fill_destaque = PatternFill(start_color="EBF5FB", end_color="EBF5FB", fill_type="solid")
+
+    # Cabeçalho Principal
+    ws.merge_cells("B2:D2")
+    header = ws.cell(row=2, column=2, value=titulo_tabela or "Dispersão e Regressão")
+    header.font = Font(name="Arial", size=11, bold=True)
+    header.alignment = Alignment(horizontal="center", vertical="center")
+    for c in range(2, 5):
+        ws.cell(row=2, column=c).border = borda_fina
+
+    # Colunas de dados
+    col_ponto = "Ponto" if "Ponto" in df.columns else df.columns[0]
+    col_x = "X" if "X" in df.columns else (df.columns[1] if len(df.columns) > 1 else df.columns[0])
+    col_y = "Y" if "Y" in df.columns else (df.columns[2] if len(df.columns) > 2 else df.columns[-1])
+
+    c_p = ws.cell(row=3, column=2, value="Ponto")
+    c_x = ws.cell(row=3, column=3, value=rotulo_x or "Variável X")
+    c_y = ws.cell(row=3, column=4, value=rotulo_y or "Variável Y")
+    for cell in (c_p, c_x, c_y):
+        cell.font = Font(name="Arial", size=10, bold=True)
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.fill = fill_cabecalho
+        cell.border = borda_fina
+
+    for r_idx, row in df.iterrows():
+        r = 4 + r_idx
+        ws.cell(row=r, column=2, value=str(row.get(col_ponto, f"P{r_idx+1}"))).alignment = Alignment(horizontal="center")
+        ws.cell(row=r, column=2).border = borda_fina
+
+        vx = row.get(col_x, np.nan)
+        cell_x = ws.cell(row=r, column=3, value=float(vx) if pd.notnull(vx) else None)
+        cell_x.alignment = Alignment(horizontal="center")
+        cell_x.border = borda_fina
+        if cell_x.value is not None:
+            cell_x.number_format = "0.00"
+
+        vy = row.get(col_y, np.nan)
+        cell_y = ws.cell(row=r, column=4, value=float(vy) if pd.notnull(vy) else None)
+        cell_y.alignment = Alignment(horizontal="center")
+        cell_y.border = borda_fina
+        if cell_y.value is not None:
+            cell_y.number_format = "0.00"
+
+    fim_dados = 3 + len(df)
+
+    # Bloco de Estatísticas e Regressão Linear
+    reg = calcular_regressao_linear(df[col_x], df[col_y]) if len(df) >= 2 else {}
+    if reg:
+        row_stat = fim_dados + 2
+        ws.merge_cells(f"B{row_stat}:D{row_stat}")
+        st_header = ws.cell(row=row_stat, column=2, value="Sumário Estatístico e Regressão Linear")
+        st_header.font = Font(name="Arial", size=10, bold=True, color="1E3A8A")
+        st_header.fill = fill_destaque
+        st_header.alignment = Alignment(horizontal="left", vertical="center")
+
+        stats_linhas = [
+            ("Equação da Reta (y = ax + b)", reg.get("equacao", "-")),
+            ("Coeficiente de Determinação (R²)", f"{reg.get('r2_formatado', '-')} ({reg.get('r2', 0)*100:.1f}%)"),
+            ("Correlação de Pearson (r)", f"{reg.get('r_formatado', '-')} ({reg.get('forca', '')} {reg.get('direcao', '')})"),
+            ("Erro Padrão da Estimativa (Se)", f"{reg.get('se', 0):.4f}".replace(".", ",")),
+            ("Observações Válidas (N)", str(reg.get("n", 0))),
+            ("Média de X", f"{reg.get('media_x', 0):.2f} (±{reg.get('desvio_x', 0):.2f})".replace(".", ",")),
+            ("Média de Y", f"{reg.get('media_y', 0):.2f} (±{reg.get('desvio_y', 0):.2f})".replace(".", ",")),
+            ("Interpretação Científica", reg.get("interpretacao", "")),
+        ]
+
+        for idx_st, (rot, val) in enumerate(stats_linhas, start=1):
+            r_cur = row_stat + idx_st
+            ws.cell(row=r_cur, column=2, value=rot).font = Font(name="Arial", size=9, bold=True)
+            ws.cell(row=r_cur, column=2).border = borda_fina
+            ws.merge_cells(f"C{r_cur}:D{r_cur}")
+            c_val = ws.cell(row=r_cur, column=3, value=val)
+            c_val.font = Font(name="Arial", size=9)
+            c_val.border = borda_fina
+            ws.cell(row=r_cur, column=4).border = borda_fina
+
+    # Gráfico de Dispersão Nativo no Excel
+    try:
+        chart = ScatterChart()
+        chart.title = titulo_grafico or "Dispersão X vs Y"
+        chart.style = 13
+        chart.x_axis.title = rotulo_x or "X"
+        chart.y_axis.title = rotulo_y or "Y"
+        if min_x is not None:
+            chart.x_axis.scaling.min = float(min_x)
+        if max_x is not None:
+            chart.x_axis.scaling.max = float(max_x)
+        if min_y is not None:
+            chart.y_axis.scaling.min = float(min_y)
+        if max_y is not None:
+            chart.y_axis.scaling.max = float(max_y)
+        chart.width = 16
+        chart.height = 10
+
+        xvalues = Reference(ws, min_col=3, min_row=4, max_row=fim_dados)
+        yvalues = Reference(ws, min_col=4, min_row=4, max_row=fim_dados)
+        series = Series(yvalues, xvalues, title_from_data=False)
+        series.title = "Medições"
+        series.marker.symbol = "circle"
+        series.marker.graphicalProperties.solidFill = "5B9BD5"
+        series.marker.graphicalProperties.line.solidFill = "41719C"
+        series.graphicalProperties.line.noFill = True
+        chart.series.append(series)
+        ws.add_chart(chart, "F2")
+    except Exception:
+        pass
+
+    ws.column_dimensions["A"].width = 3
+    ws.column_dimensions["B"].width = 24
+    ws.column_dimensions["C"].width = 18
+    ws.column_dimensions["D"].width = 18
+    ws.column_dimensions["E"].width = 4
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf.getvalue()
+

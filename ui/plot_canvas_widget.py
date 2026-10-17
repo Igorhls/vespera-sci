@@ -77,6 +77,17 @@ class PlotCanvasWidget(QWidget):
             chk.toggled.connect(self._on_series_toggled)
             series_layout.addWidget(chk)
 
+        # Checkboxes modo dispersão
+        self.chk_pontos_disp = QCheckBox("Pontos (X, Y)")
+        self.chk_reta_disp = QCheckBox("Linha de Regressão")
+        self.chk_r2_disp = QCheckBox("R² no Gráfico")
+        for chk in (self.chk_pontos_disp, self.chk_reta_disp, self.chk_r2_disp):
+            chk.setChecked(True)
+            chk.setVisible(False)
+            chk.setCursor(Qt.PointingHandCursor)
+            chk.toggled.connect(self._on_series_toggled)
+            series_layout.addWidget(chk)
+
         series_layout.addStretch()
 
         lbl_dica = QLabel(
@@ -154,18 +165,23 @@ class PlotCanvasWidget(QWidget):
         self._nome_base_padrao = limpo or "grafico"
 
     def configurar_modo(self, tipo_grafico: str, rotulos_barras: dict = None):
-        """Alterna os checkboxes visíveis conforme o modo ('linhas' ou 'barras')."""
+        """Alterna os checkboxes visíveis conforme o modo ('linhas', 'barras' ou 'dispersao')."""
         self._updating_ui = True
         self.tipo_grafico = tipo_grafico
         is_linhas = tipo_grafico == "linhas"
+        is_barras = tipo_grafico == "barras"
+        is_dispersao = tipo_grafico == "dispersao"
 
         for chk in (self.chk_manha, self.chk_tarde, self.chk_noite):
             chk.setVisible(is_linhas)
 
         for chk in (self.chk_bosque, self.chk_desvio_bosque, self.chk_estac, self.chk_desvio_estac):
-            chk.setVisible(not is_linhas)
+            chk.setVisible(is_barras)
 
-        if rotulos_barras:
+        for chk in (self.chk_pontos_disp, self.chk_reta_disp, self.chk_r2_disp):
+            chk.setVisible(is_dispersao)
+
+        if rotulos_barras and is_barras:
             self.chk_bosque.setText(rotulos_barras.get("Bosque", "Bosque"))
             self.chk_desvio_bosque.setText(f"{rotulos_barras.get('Desvio_Bosque', 'Desvio/p')} (1)")
             self.chk_estac.setText(rotulos_barras.get("Estacionamento", "Estacionamento"))
@@ -182,6 +198,9 @@ class PlotCanvasWidget(QWidget):
         self.chk_desvio_bosque.setChecked(bool(cfg.get("show_desvio_bosque", True)))
         self.chk_estac.setChecked(bool(cfg.get("show_estacionamento", True)))
         self.chk_desvio_estac.setChecked(bool(cfg.get("show_desvio_estacionamento", True)))
+        self.chk_pontos_disp.setChecked(bool(cfg.get("show_pontos_dispersao", True)))
+        self.chk_reta_disp.setChecked(bool(cfg.get("show_reta_dispersao", True)))
+        self.chk_r2_disp.setChecked(bool(cfg.get("show_r2_dispersao", True)))
         self._updating_ui = False
 
     def obter_estado_series(self) -> dict:
@@ -193,6 +212,9 @@ class PlotCanvasWidget(QWidget):
             "show_desvio_bosque": self.chk_desvio_bosque.isChecked(),
             "show_estacionamento": self.chk_estac.isChecked(),
             "show_desvio_estacionamento": self.chk_desvio_estac.isChecked(),
+            "show_pontos_dispersao": self.chk_pontos_disp.isChecked(),
+            "show_reta_dispersao": self.chk_reta_disp.isChecked(),
+            "show_r2_dispersao": self.chk_r2_disp.isChecked(),
         }
 
     def obter_series_linhas_ativas(self) -> list:
@@ -216,6 +238,13 @@ class PlotCanvasWidget(QWidget):
         if self.chk_desvio_estac.isChecked():
             ativas.append("Desvio_Estacionamento")
         return ativas
+
+    def obter_series_dispersao_ativas(self) -> dict:
+        return {
+            "pontos": self.chk_pontos_disp.isChecked(),
+            "reta": self.chk_reta_disp.isChecked(),
+            "r2": self.chk_r2_disp.isChecked(),
+        }
 
     def atualizar_canvas(self):
         self.canvas.draw_idle()
