@@ -348,8 +348,30 @@ class SidebarControlsWidget(QScrollArea):
         self.spn_largura_grupo.setValue(0.68)
         self.spn_largura_grupo.valueChanged.connect(self._emit_change)
 
+        self.spn_espaco_subgrupos = QDoubleSpinBox()
+        self.spn_espaco_subgrupos.setRange(0.0, 1.50)
+        self.spn_espaco_subgrupos.setSingleStep(0.05)
+        self.spn_espaco_subgrupos.setDecimals(2)
+        self.spn_espaco_subgrupos.setValue(0.35)
+        self.spn_espaco_subgrupos.setToolTip(
+            "Espaçamento entre os pares/subgrupos de barras (ex: entre Bosque e Estacionamento)."
+        )
+        self.spn_espaco_subgrupos.valueChanged.connect(self._emit_change)
+
+        self.spn_espaco_barras = QDoubleSpinBox()
+        self.spn_espaco_barras.setRange(0.0, 0.50)
+        self.spn_espaco_barras.setSingleStep(0.02)
+        self.spn_espaco_barras.setDecimals(2)
+        self.spn_espaco_barras.setValue(0.0)
+        self.spn_espaco_barras.setToolTip(
+            "Espaçamento individual entre barras do mesmo subgrupo."
+        )
+        self.spn_espaco_barras.valueChanged.connect(self._emit_change)
+
         form_barras.addRow("Formato:", self.cmb_fmt_decimais)
-        form_barras.addRow("Largura:", self.spn_largura_grupo)
+        form_barras.addRow("Largura Total:", self.spn_largura_grupo)
+        form_barras.addRow("Espaço Pares (Subgrupos):", self.spn_espaco_subgrupos)
+        form_barras.addRow("Espaço Barras (Geral):", self.spn_espaco_barras)
         ob_layout.addLayout(form_barras)
         self.grp_opcoes_barras.setVisible(False)
         l_estilo.addWidget(self.grp_opcoes_barras)
@@ -695,6 +717,8 @@ class SidebarControlsWidget(QScrollArea):
             self.cmb_fmt_decimais, cfg.get("formato_decimais_barras", DEFAULT_CONFIG["formato_decimais_barras"])
         )
         self.spn_largura_grupo.setValue(float(cfg.get("largura_grupo_barras", 0.68)))
+        self.spn_espaco_subgrupos.setValue(float(cfg.get("espaco_subgrupos_barras", 0.35)))
+        self.spn_espaco_barras.setValue(float(cfg.get("espaco_barras", 0.0)))
 
         self.chk_exibir_leg.setChecked(bool(cfg.get("exibir_legenda", True)))
         self.chk_moldura_leg.setChecked(bool(cfg.get("moldura_legenda", True)))
@@ -743,6 +767,8 @@ class SidebarControlsWidget(QScrollArea):
             "formato_decimais_barras": self.cmb_fmt_decimais.currentText(),
             "negrito_valores_barras": self.chk_negrito_barras.isChecked(),
             "largura_grupo_barras": float(self.spn_largura_grupo.value()),
+            "espaco_subgrupos_barras": float(self.spn_espaco_subgrupos.value()),
+            "espaco_barras": float(self.spn_espaco_barras.value()),
             "espessura_linha": float(self.spn_esp_linha.value()),
             "modo_estilo_linhas": modo_atual,
             "tamanho_marcador": float(self.spn_tam_marcador.value()),

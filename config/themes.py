@@ -205,6 +205,8 @@ DEFAULT_CONFIG = {
     "hachura_desvio_bosque": "Nenhum (Sólido)",
     "hachura_estacionamento": "Diagonal Direita (//)",
     "hachura_desvio_estacionamento": "Pontilhado / Pontos (..)",
+    "espaco_subgrupos_barras": 0.35,
+    "espaco_barras": 0.0,
 }
 
 MODOS_ESTILO_LINHAS = [

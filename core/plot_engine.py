@@ -252,6 +252,58 @@ def renderizar_grafico_linhas(
     return fig
 
 
+def calcular_posicoes_barras(
+    n_series: int,
+    largura_grupo: float = 0.70,
+    espaco_subgrupos: float = 0.35,
+    espaco_barras: float = 0.0,
+):
+    """
+    Calcula a largura individual de cada barra e os offsets em relação ao centro do cluster.
+
+    Se n_series == 4, divide em 2 subgrupos (0,1) e (2,3) com espaco_subgrupos entre eles.
+    Se n_series é par e >= 4, insere o espaco_subgrupos no ponto central (n_series // 2).
+    """
+    if n_series <= 0:
+        return 0.1, []
+
+    ponto_subgrupo = (n_series // 2) if (n_series >= 4 and n_series % 2 == 0) else None
+
+    num_gaps_barras = n_series - 1
+    num_gaps_sub = 1 if ponto_subgrupo is not None and espaco_subgrupos > 0 else 0
+    if num_gaps_sub > 0:
+        num_gaps_barras -= 1
+
+    fator_total = (
+        float(n_series)
+        + float(num_gaps_barras) * float(espaco_barras)
+        + float(num_gaps_sub) * float(espaco_subgrupos + espaco_barras)
+    )
+    if fator_total <= 0:
+        fator_total = float(n_series)
+
+    largura_barra = float(largura_grupo) / fator_total
+    gap_b = float(espaco_barras) * largura_barra
+    gap_s = float(espaco_subgrupos) * largura_barra
+
+    centers = []
+    current_edge = 0.0
+    for i in range(n_series):
+        center_i = current_edge + 0.5 * largura_barra
+        centers.append(center_i)
+        current_edge += largura_barra
+        if i < n_series - 1:
+            if ponto_subgrupo is not None and (i + 1) == ponto_subgrupo:
+                current_edge += gap_b + gap_s
+            else:
+                current_edge += gap_b
+
+    total_w = current_edge
+    midpoint = total_w / 2.0
+    offsets = [c - midpoint for c in centers]
+    return largura_barra, offsets
+
+
 def renderizar_grafico_barras(
     df: pd.DataFrame,
     titulo_grafico: str,
@@ -274,10 +326,12 @@ def renderizar_grafico_barras(
     exibir_grade: bool,
     fig=None,
     hachuras_barras: dict = None,
+    espaco_subgrupos: float = 0.35,
+    espaco_barras: float = 0.0,
 ):
     """
     Renderiza o Gráfico de Barras Agrupadas (Média e Desvio Padrão: Bosque vs Estacionamento)
-    no padrão OriginLab Pro com suporte a padrões de hachura (hatches) e legenda arrastável.
+    no padrão OriginLab Pro com suporte a padrões de hachura (hatches), espaçamento de subgrupos e legenda arrastável.
     """
     configurar_fonte_matplotlib(fonte_nome)
 
@@ -303,11 +357,11 @@ def renderizar_grafico_barras(
 
     n_series = len(series_plot)
     if n_series > 0 and len(x_indices) > 0:
-        largura_barra = largura_grupo / n_series
-        offsets = np.linspace(
-            -largura_grupo / 2.0 + largura_barra / 2.0,
-            largura_grupo / 2.0 - largura_barra / 2.0,
-            n_series,
+        largura_barra, offsets = calcular_posicoes_barras(
+            n_series=n_series,
+            largura_grupo=largura_grupo,
+            espaco_subgrupos=espaco_subgrupos,
+            espaco_barras=espaco_barras,
         )
 
         for idx_s, (col_name, label_leg) in enumerate(series_plot):

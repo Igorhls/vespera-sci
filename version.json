@@ -1,7 +1,7 @@
 {
-  "version": "1.7.0",
+  "version": "1.8.0",
   "release_date": "2026-10-17",
   "repo": "Igorhls/vespera-sci",
   "branch": "main",
-  "notes": "Vespera Sci Alpha — Réplica fiel do modelo OriginLab: suporte a hachuras/texturas em gráficos de barras, paleta Hachurada de pesquisa, edição e sincronização de rótulos dos eixos X (abaixo) e Y (ao lado) na tabela e no submenu"
+  "notes": "Vespera Sci Alpha — Espaçamento configurável entre pares/subgrupos de barras (separando Bosque e Estacionamento) e ajuste de espaço individual de barras sincronizado em tempo real"
 }

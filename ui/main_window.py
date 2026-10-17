@@ -554,6 +554,12 @@ class VesperaMainWindow(QMainWindow):
             self.table_widget.txt_rotulo_y.setText(self.sidebar.txt_rotulo_y.text())
             self.table_widget.txt_rotulo_y.blockSignals(False)
 
+        side_sub = self.sidebar.spn_espaco_subgrupos.value()
+        if abs(self.table_widget.spn_espaco_subgrupos.value() - side_sub) > 1e-4:
+            self.table_widget.spn_espaco_subgrupos.blockSignals(True)
+            self.table_widget.spn_espaco_subgrupos.setValue(side_sub)
+            self.table_widget.spn_espaco_subgrupos.blockSignals(False)
+
         self.atualizar_grafico()
 
     def _on_table_meta_changed(self):
@@ -572,6 +578,12 @@ class VesperaMainWindow(QMainWindow):
             self.sidebar.txt_rotulo_y.blockSignals(True)
             self.sidebar.txt_rotulo_y.setText(self.table_widget.txt_rotulo_y.text())
             self.sidebar.txt_rotulo_y.blockSignals(False)
+
+        meta_sub = self.table_widget.spn_espaco_subgrupos.value()
+        if abs(self.sidebar.spn_espaco_subgrupos.value() - meta_sub) > 1e-4:
+            self.sidebar.spn_espaco_subgrupos.blockSignals(True)
+            self.sidebar.spn_espaco_subgrupos.setValue(meta_sub)
+            self.sidebar.spn_espaco_subgrupos.blockSignals(False)
 
         self.atualizar_grafico()
 
@@ -704,6 +716,8 @@ class VesperaMainWindow(QMainWindow):
                 exibir_grade=cfg["exibir_grade"],
                 fig=self.plot_widget.fig,
                 hachuras_barras=self.sidebar.obter_hachuras_barras_ativas(),
+                espaco_subgrupos=float(cfg.get("espaco_subgrupos_barras", 0.35)),
+                espaco_barras=float(cfg.get("espaco_barras", 0.0)),
             )
 
         self.plot_widget.atualizar_canvas()

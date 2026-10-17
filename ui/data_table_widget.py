@@ -174,6 +174,19 @@ class DataTableWidget(QWidget):
             rb_layout.addWidget(w_edit)
             w_edit.textChanged.connect(self._on_rotulos_barras_changed)
 
+        rb_layout.addSpacing(6)
+        rb_layout.addWidget(QLabel("<b>Espaço Pares:</b>"))
+        self.spn_espaco_subgrupos = QDoubleSpinBox()
+        self.spn_espaco_subgrupos.setRange(0.0, 1.50)
+        self.spn_espaco_subgrupos.setSingleStep(0.05)
+        self.spn_espaco_subgrupos.setDecimals(2)
+        self.spn_espaco_subgrupos.setValue(0.35)
+        self.spn_espaco_subgrupos.setToolTip(
+            "Espaçamento entre os pares/subgrupos de barras (ex: entre Bosque e Estacionamento)."
+        )
+        self.spn_espaco_subgrupos.valueChanged.connect(self._on_meta_changed)
+        rb_layout.addWidget(self.spn_espaco_subgrupos)
+
         self.grp_rotulos_barras.setVisible(False)
         layout_dados.addWidget(self.grp_rotulos_barras)
 
@@ -419,6 +432,7 @@ class DataTableWidget(QWidget):
         self.txt_rs2.setText(str(cfg.get("rotulo_s2", "Desvio/p")))
         self.txt_rs3.setText(str(cfg.get("rotulo_s3", "Estacionamento")))
         self.txt_rs4.setText(str(cfg.get("rotulo_s4", "Desvio/p")))
+        self.spn_espaco_subgrupos.setValue(float(cfg.get("espaco_subgrupos_barras", 0.35)))
         self._updating_ui = False
 
         self.configurar_modo(tipo_grafico)
@@ -518,6 +532,7 @@ class DataTableWidget(QWidget):
             "rotulo_s2": self.txt_rs2.text() or "Desvio/p",
             "rotulo_s3": self.txt_rs3.text() or "Estacionamento",
             "rotulo_s4": self.txt_rs4.text() or "Desvio/p",
+            "espaco_subgrupos_barras": float(self.spn_espaco_subgrupos.value()),
         }
 
     def _on_table_item_changed(self, _item):
