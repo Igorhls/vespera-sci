@@ -125,10 +125,27 @@ class DataTableWidget(QWidget):
         self.spn_max_y.setSingleStep(1.0)
         self.spn_max_y.valueChanged.connect(self._on_meta_changed)
 
-        grid_meta.addWidget(QLabel("<b>Y Mínimo:</b>"), 2, 0)
-        grid_meta.addWidget(self.spn_min_y, 2, 1)
-        grid_meta.addWidget(QLabel("<b>Y Máximo:</b>"), 2, 2)
-        grid_meta.addWidget(self.spn_max_y, 2, 3)
+        self.spn_intervalo_ticks_y = QDoubleSpinBox()
+        self.spn_intervalo_ticks_y.setRange(0.0, 100.0)
+        self.spn_intervalo_ticks_y.setDecimals(1)
+        self.spn_intervalo_ticks_y.setSingleStep(1.0)
+        self.spn_intervalo_ticks_y.setValue(0.0)
+        self.spn_intervalo_ticks_y.setSpecialValueText("Automático")
+        self.spn_intervalo_ticks_y.setToolTip("Espaçamento dos números/ticks no eixo Y (0 = Automático).")
+        self.spn_intervalo_ticks_y.valueChanged.connect(self._on_meta_changed)
+
+        grid_meta.addWidget(QLabel("<b>Limites Y:</b>"), 2, 0)
+        lim_y_layout = QHBoxLayout()
+        lim_y_layout.setContentsMargins(0, 0, 0, 0)
+        lim_y_layout.setSpacing(6)
+        lim_y_layout.addWidget(QLabel("Mín:"))
+        lim_y_layout.addWidget(self.spn_min_y)
+        lim_y_layout.addWidget(QLabel("Máx:"))
+        lim_y_layout.addWidget(self.spn_max_y)
+        grid_meta.addLayout(lim_y_layout, 2, 1)
+
+        grid_meta.addWidget(QLabel("<b>Passo Ticks (Y):</b>"), 2, 2)
+        grid_meta.addWidget(self.spn_intervalo_ticks_y, 2, 3)
 
         layout_dados.addWidget(meta_card)
 
@@ -394,6 +411,7 @@ class DataTableWidget(QWidget):
         self.txt_rotulo_y.setText(str(cfg.get("rotulo_y", "Temperatura do ar (°C)")))
         self.spn_min_y.setValue(float(min_y if min_y is not None else 24.0))
         self.spn_max_y.setValue(float(max_y if max_y is not None else 33.0))
+        self.spn_intervalo_ticks_y.setValue(float(cfg.get("intervalo_ticks_y", 0.0)))
 
         self.txt_rs1.setText(str(cfg.get("rotulo_s1", "Bosque")))
         self.txt_rs2.setText(str(cfg.get("rotulo_s2", "Desvio/p")))
@@ -493,6 +511,7 @@ class DataTableWidget(QWidget):
             "rotulo_y": self.txt_rotulo_y.text(),
             "min_y": float(self.spn_min_y.value()),
             "max_y": float(self.spn_max_y.value()),
+            "intervalo_ticks_y": float(self.spn_intervalo_ticks_y.value()),
             "rotulo_s1": self.txt_rs1.text() or "Bosque",
             "rotulo_s2": self.txt_rs2.text() or "Desvio/p",
             "rotulo_s3": self.txt_rs3.text() or "Estacionamento",

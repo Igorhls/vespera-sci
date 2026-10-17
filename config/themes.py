@@ -141,6 +141,7 @@ DEFAULT_CONFIG = {
     "minor_ticks": True,
     "cor_moldura": "#000000",
     "esp_moldura": 1.15,
+    "intervalo_ticks_y": 0.0,
 }
 
 MODOS_ESTILO_LINHAS = [

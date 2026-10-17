@@ -364,14 +364,14 @@ class VesperaMainWindow(QMainWindow):
         self.setStatusBar(self.status_bar)
 
         # Conexão de sinais
-        self.sidebar.configChanged.connect(self.atualizar_grafico)
+        self.sidebar.configChanged.connect(self._on_sidebar_config_changed)
         self.sidebar.modeChangeRequested.connect(self._alternar_modo)
         self.sidebar.presetSelected.connect(self._carregar_preset)
         self.sidebar.importSpreadsheetRequested.connect(self._importar_planilha)
         self.sidebar.importProjectFileRequested.connect(self._importar_arquivo_projeto)
         self.sidebar.hideRequested.connect(self._alternar_submenu)
 
-        self.table_widget.dataOrMetaChanged.connect(self.atualizar_grafico)
+        self.table_widget.dataOrMetaChanged.connect(self._on_table_meta_changed)
         self.table_widget.hideRequested.connect(self._alternar_tabela)
 
         self.plot_widget.seriesVisibilityChanged.connect(self.atualizar_grafico)
@@ -531,6 +531,22 @@ class VesperaMainWindow(QMainWindow):
         self._atualizar_botoes_modo()
         self.atualizar_grafico()
 
+    def _on_sidebar_config_changed(self):
+        side_passo = self.sidebar.spn_intervalo_ticks_y.value()
+        if abs(self.table_widget.spn_intervalo_ticks_y.value() - side_passo) > 1e-4:
+            self.table_widget.spn_intervalo_ticks_y.blockSignals(True)
+            self.table_widget.spn_intervalo_ticks_y.setValue(side_passo)
+            self.table_widget.spn_intervalo_ticks_y.blockSignals(False)
+        self.atualizar_grafico()
+
+    def _on_table_meta_changed(self):
+        meta_passo = self.table_widget.spn_intervalo_ticks_y.value()
+        if abs(self.sidebar.spn_intervalo_ticks_y.value() - meta_passo) > 1e-4:
+            self.sidebar.spn_intervalo_ticks_y.blockSignals(True)
+            self.sidebar.spn_intervalo_ticks_y.setValue(meta_passo)
+            self.sidebar.spn_intervalo_ticks_y.blockSignals(False)
+        self.atualizar_grafico()
+
     def atualizar_grafico(self):
         df = self.table_widget.obter_dataframe_atual()
         meta = self.table_widget.obter_metadados()
@@ -561,6 +577,7 @@ class VesperaMainWindow(QMainWindow):
             "esquerda": cfg["ticks_esq"],
             "direcao": "in" if "dentro" in cfg["direcao_ticks"] else "out",
             "minor_ticks": cfg["minor_ticks"],
+            "intervalo_y": float(cfg.get("intervalo_ticks_y", 0.0)),
         }
         legenda_config = {
             "exibir": cfg["exibir_legenda"],

@@ -414,6 +414,19 @@ class SidebarControlsWidget(QScrollArea):
         self.btn_cor_moldura = ColorButton("#000000", "Cor da Moldura")
         self.btn_cor_moldura.colorChanged.connect(self._emit_change)
 
+        self.spn_intervalo_ticks_y = QDoubleSpinBox()
+        self.spn_intervalo_ticks_y.setRange(0.0, 100.0)
+        self.spn_intervalo_ticks_y.setSingleStep(1.0)
+        self.spn_intervalo_ticks_y.setDecimals(1)
+        self.spn_intervalo_ticks_y.setValue(0.0)
+        self.spn_intervalo_ticks_y.setSpecialValueText("Automático (Auto)")
+        self.spn_intervalo_ticks_y.setToolTip(
+            "Espaçamento numérico entre cada traço principal (tick) do eixo Y.\n"
+            "'Automático' calcula a divisão ideal (ex: 2, 5, 10) evitando aglomeração de números."
+        )
+        self.spn_intervalo_ticks_y.valueChanged.connect(self._emit_change)
+
+        form_ticks.addRow("Intervalo Y (Passo):", self.spn_intervalo_ticks_y)
         form_ticks.addRow("Direção:", self.cmb_dir_ticks)
         form_ticks.addRow("Espessura:", self.spn_esp_moldura)
         form_ticks.addRow("Cor:", self.btn_cor_moldura)
@@ -649,6 +662,7 @@ class SidebarControlsWidget(QScrollArea):
         self.chk_minor_ticks.setChecked(bool(cfg.get("minor_ticks", True)))
         self.btn_cor_moldura.set_color(cfg.get("cor_moldura", "#000000"))
         self.spn_esp_moldura.setValue(float(cfg.get("esp_moldura", 1.15)))
+        self.spn_intervalo_ticks_y.setValue(float(cfg.get("intervalo_ticks_y", 0.0)))
 
         self._updating_ui = False
 
@@ -704,6 +718,7 @@ class SidebarControlsWidget(QScrollArea):
             "minor_ticks": self.chk_minor_ticks.isChecked(),
             "cor_moldura": self.btn_cor_moldura.get_color(),
             "esp_moldura": float(self.spn_esp_moldura.value()),
+            "intervalo_ticks_y": float(self.spn_intervalo_ticks_y.value()),
         }
 
     def obter_cores_linhas_ativas(self) -> dict:

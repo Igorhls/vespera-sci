@@ -1,7 +1,7 @@
 {
-  "version": "1.5.0",
+  "version": "1.6.0",
   "release_date": "2026-10-17",
   "repo": "Igorhls/vespera-sci",
   "branch": "main",
-  "notes": "Vespera Sci Alpha — Transformação da primeira janela em submenu flutuante não-modal (Ctrl+E): layout principal limpo em 2 áreas amplas (Tabela de Dados e Gráfico Científico) com proporção 850x530 estritamente preservada"
+  "notes": "Vespera Sci Alpha — Ajuste de intervalo (passo) de ticks do eixo Y: modo Automático inteligente anti-aglomeração de números e configuração manual de passo sincronizada entre tabela de dados e submenu de configurações"
 }

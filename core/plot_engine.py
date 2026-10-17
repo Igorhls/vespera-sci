@@ -28,6 +28,35 @@ def configurar_fonte_matplotlib(fonte_nome: str):
         plt.rcParams["font.family"] = "sans-serif"
 
 
+def calcular_passo_ticks_y(pad_min: float, pad_max: float, intervalo_config: float = 0.0) -> float:
+    """Calcula o passo dos ticks principais do eixo Y.
+
+    Se intervalo_config > 0, respeita a escolha manual do usuário.
+    Se intervalo_config <= 0 (automático), escolhe um passo padrão científico (1, 2, 5, 10, 20...)
+    para gerar entre 4 e 7 divisões limpas, evitando aglomeração de números.
+    """
+    if intervalo_config and float(intervalo_config) > 0.0:
+        return float(intervalo_config)
+
+    delta = abs(pad_max - pad_min)
+    if delta <= 0:
+        return 1.0
+
+    passo_bruto = delta / 6.0
+    ordem = 10.0 ** np.floor(np.log10(passo_bruto))
+    fracao = passo_bruto / ordem
+    if fracao <= 1.5:
+        fator = 1.0
+    elif fracao <= 3.5:
+        fator = 2.0
+    elif fracao <= 7.5:
+        fator = 5.0
+    else:
+        fator = 10.0
+    return float(fator * ordem)
+
+
+
 def renderizar_grafico_linhas(
     df: pd.DataFrame,
     titulo_grafico: str,
@@ -147,10 +176,13 @@ def renderizar_grafico_linhas(
         labelsize=tamanho_fonte - 0.5,
     )
 
+    passo_y = calcular_passo_ticks_y(pad_min, pad_max, ticks_config.get("intervalo_y", 0.0))
+    ax.yaxis.set_major_locator(ticker.MultipleLocator(passo_y))
+
     if ticks_config.get("minor_ticks", True):
         ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(2))
-        ax.yaxis.set_major_locator(ticker.MultipleLocator(1))
-        ax.yaxis.set_minor_locator(ticker.AutoMinorLocator(2))
+        subdivisoes = 5 if (passo_y >= 5.0 and passo_y % 5 == 0) else 2
+        ax.yaxis.set_minor_locator(ticker.AutoMinorLocator(subdivisoes))
         ax.tick_params(
             which="minor",
             direction=direcao_t,
@@ -163,7 +195,8 @@ def renderizar_grafico_linhas(
             color=cor_borda,
         )
     else:
-        ax.yaxis.set_major_locator(ticker.MultipleLocator(2))
+        ax.xaxis.set_minor_locator(ticker.NullLocator())
+        ax.yaxis.set_minor_locator(ticker.NullLocator())
 
     ax.set_axisbelow(True)
     if exibir_grade:
@@ -353,14 +386,14 @@ def renderizar_grafico_barras(
         labelsize=tamanho_fonte - 0.5,
     )
 
-    intervalo_y = pad_max - pad_min
-    passo_maior_y = 5.0 if intervalo_y >= 15.0 else 2.0
+    passo_maior_y = calcular_passo_ticks_y(pad_min, pad_max, ticks_config.get("intervalo_y", 0.0))
     ax.yaxis.set_major_locator(ticker.MultipleLocator(passo_maior_y))
 
     if ticks_config.get("minor_ticks", True):
         if len(x_indices) > 0:
             ax.xaxis.set_minor_locator(ticker.FixedLocator(np.arange(-0.5, len(x_indices) + 0.5, 1.0)))
-        ax.yaxis.set_minor_locator(ticker.AutoMinorLocator(2))
+        subdivisoes = 5 if (passo_maior_y >= 5.0 and passo_maior_y % 5 == 0) else 2
+        ax.yaxis.set_minor_locator(ticker.AutoMinorLocator(subdivisoes))
         ax.tick_params(
             which="minor",
             direction=direcao_t,
@@ -372,6 +405,9 @@ def renderizar_grafico_barras(
             width=0.8,
             color=cor_borda,
         )
+    else:
+        ax.xaxis.set_minor_locator(ticker.NullLocator())
+        ax.yaxis.set_minor_locator(ticker.NullLocator())
 
     ax.set_axisbelow(True)
     if exibir_grade:
