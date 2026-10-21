@@ -248,3 +248,21 @@ PRESETS_DISPERSAO = {
     },
 }
 
+
+
+PRESETS_BOXPLOT = {
+    "Distribuição Térmica — Bosque vs. Estacionamento": {
+        "tipo_grafico": "boxplot",
+        "titulo_dia": "Distribuição Térmica",
+        "titulo_grafico": "COMPARAÇÃO TÉRMICA: BOSQUE VS. ESTACIONAMENTO",
+        "rotulo_x": "Ambientes Amostrais",
+        "rotulo_y": "Temperatura do ar (°C)",
+        "min_y": 20.0,
+        "max_y": 36.0,
+        "df": pd.DataFrame({
+            "Ponto": [f"P{i}" for i in range(1, 11)],
+            "Bosque": [26.2, 26.5, 26.5, 26.9, 27.2, 27.4, 27.1, 27.2, 27.3, 27.6],
+            "Estacionamento": [28.5, 29.0, 29.5, 29.6, 30.4, 31.4, 30.9, 31.4, 30.3, 31.8],
+        }),
+    }
+}

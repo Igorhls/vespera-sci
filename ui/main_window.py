@@ -8,7 +8,7 @@ import json
 import os
 import numpy as np
 import pandas as pd
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSettings, QTimer, Qt
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
@@ -27,15 +27,17 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from config.presets import PRESETS_BARRAS, PRESETS_DISPERSAO, PRESETS_LINHAS
+from config.presets import PRESETS_BARRAS, PRESETS_BOXPLOT, PRESETS_DISPERSAO, PRESETS_LINHAS
 from config.themes import DEFAULT_CONFIG
 from core.excel_exporter import (
     gerar_excel_barras_bytes,
+    gerar_excel_boxplot_bytes,
     gerar_excel_dispersao_bytes,
     gerar_excel_linhas_bytes,
 )
 from core.plot_engine import (
     renderizar_grafico_barras,
+    renderizar_grafico_boxplot,
     renderizar_grafico_dispersao,
     renderizar_grafico_linhas,
 )
@@ -68,12 +70,30 @@ class VesperaMainWindow(QMainWindow):
         self.nome_projeto_atual = "Dia 14 de agosto"
         self.cfg_atual = DEFAULT_CONFIG.copy()
         self._updating_project_combo = False
-        self.tema_atual = "light"
+        self.settings = QSettings("VesperaSci", "VesperaSciAlpha")
+        self.tema_atual = str(self.settings.value("theme", "light"))
+        saved_geom = self.settings.value("geometry")
+        if saved_geom:
+            self.restoreGeometry(saved_geom)
+
+        self._debounce_timer = QTimer(self)
+        self._debounce_timer.setSingleShot(True)
+        self._debounce_timer.setInterval(75)
+        self._debounce_timer.timeout.connect(self._executar_atualizacao_grafico)
 
         self._apply_theme()
         self._build_menu()
         self._build_ui()
         self._inicializar_sessao()
+
+    
+    def closeEvent(self, event):
+        try:
+            self.settings.setValue("geometry", self.saveGeometry())
+            self.settings.setValue("theme", self.tema_atual)
+        except Exception:
+            pass
+        super().closeEvent(event)
 
     def _apply_theme(self):
         tema = THEME_DARK if self.tema_atual == "dark" else THEME_LIGHT
@@ -135,6 +155,11 @@ class VesperaMainWindow(QMainWindow):
         act_imp_xlsx.setIcon(get_icon("file-spreadsheet", size=16))
         act_imp_xlsx.triggered.connect(self._importar_planilha)
         menu_arq.addAction(act_imp_xlsx)
+
+        act_exp_svg = QAction("Exportar Gráfico em SVG Vetorial...", self)
+        act_exp_svg.setIcon(get_icon("download", size=16))
+        act_exp_svg.triggered.connect(lambda: self.plot_widget._exportar_svg() if hasattr(self, "plot_widget") else None)
+        menu_arq.addAction(act_exp_svg)
 
         menu_arq.addSeparator()
 
@@ -239,9 +264,16 @@ class VesperaMainWindow(QMainWindow):
         self.btn_modo_dispersao.setCursor(Qt.PointingHandCursor)
         self.btn_modo_dispersao.clicked.connect(lambda: self._alternar_modo("dispersao"))
 
+        self.btn_modo_boxplot = QPushButton("Boxplot (Distribuição)")
+        self.btn_modo_boxplot.setIcon(get_icon("sliders", size=16))
+        self.btn_modo_boxplot.setObjectName("btnSegment")
+        self.btn_modo_boxplot.setCursor(Qt.PointingHandCursor)
+        self.btn_modo_boxplot.clicked.connect(lambda: self._alternar_modo("boxplot"))
+
         header_layout.addWidget(self.btn_modo_linhas)
         header_layout.addWidget(self.btn_modo_barras)
         header_layout.addWidget(self.btn_modo_dispersao)
+        header_layout.addWidget(self.btn_modo_boxplot)
 
         header_layout.addStretch()
 
@@ -420,6 +452,8 @@ class VesperaMainWindow(QMainWindow):
             self._carregar_preset("Ta (°C) — Média e Desvio Padrão (Modelo OriginLab da Pesquisa)")
         elif novo_modo == "dispersao":
             self._carregar_preset("BOSQUE — URA x Ta (Regressão R² = 0,334)")
+        elif novo_modo == "boxplot":
+            self._carregar_preset("Distribuição Térmica — Bosque vs. Estacionamento")
         else:
             self._carregar_preset("Dia 14 de Agosto")
 
@@ -497,6 +531,38 @@ class VesperaMainWindow(QMainWindow):
             titulo_dia = "X vs Y"
             titulo_grafico = "DISPERSÃO X vs Y"
             min_y, max_y = 15.0, 40.0
+
+        elif nome_preset in PRESETS_BOXPLOT:
+            p = PRESETS_BOXPLOT[nome_preset]
+            self.tipo_grafico_atual = "boxplot"
+            self.nome_projeto_atual = p.get("titulo_dia", "Distribuição Térmica")
+            cfg["rotulo_x"] = p["rotulo_x"]
+            cfg["rotulo_y"] = p["rotulo_y"]
+            cfg["opcao_fonte"] = "Arial (Científico Internacional)"
+            cfg["direcao_ticks"] = "Para fora (out)"
+            cfg["ticks_topo"] = True
+            cfg["ticks_dir"] = True
+            df_alvo = p["df"].copy()
+            titulo_dia = p["titulo_dia"]
+            titulo_grafico = p["titulo_grafico"]
+            min_y, max_y = p["min_y"], p["max_y"]
+
+        elif nome_preset == "Criar Novo — Boxplot (Distribuição)":
+            self.tipo_grafico_atual = "boxplot"
+            self.nome_projeto_atual = "Novo Projeto - Boxplot"
+            cfg["rotulo_x"] = "Ambientes Amostrais"
+            cfg["rotulo_y"] = "Ta (°C)"
+            cfg["direcao_ticks"] = "Para fora (out)"
+            cfg["ticks_topo"] = True
+            cfg["ticks_dir"] = True
+            df_alvo = pd.DataFrame({
+                "Ponto": [f"P{i}" for i in range(1, 11)],
+                "Bosque": [26.0 + (i*0.2) for i in range(10)],
+                "Estacionamento": [28.0 + (i*0.35) for i in range(10)],
+            })
+            titulo_dia = "Distribuição Térmica"
+            titulo_grafico = "COMPARAÇÃO DE DISTRIBUIÇÃO"
+            min_y, max_y = 20.0, 36.0
 
         elif nome_preset == "Criar Novo — Barras (Média e Desvio)":
             self.tipo_grafico_atual = "barras"
@@ -664,6 +730,12 @@ class VesperaMainWindow(QMainWindow):
         self.atualizar_grafico()
 
     def atualizar_grafico(self):
+        if hasattr(self, "_debounce_timer"):
+            self._debounce_timer.start(75)
+        else:
+            self._executar_atualizacao_grafico()
+
+    def _executar_atualizacao_grafico(self):
         df = self.table_widget.obter_dataframe_atual()
         meta = self.table_widget.obter_metadados()
         cfg = self.sidebar.obter_config()
@@ -805,6 +877,29 @@ class VesperaMainWindow(QMainWindow):
                 fig=self.plot_widget.fig,
                 intervalo_ticks_x=float(cfg.get("intervalo_ticks_x", 0.0)),
                 intervalo_ticks_y=float(cfg.get("intervalo_ticks_y", 0.0)),
+            )
+        elif self.tipo_grafico_atual == "boxplot":
+            renderizar_grafico_boxplot(
+                df=df,
+                titulo_grafico=meta["titulo_grafico"],
+                rotulo_x=meta["rotulo_x"],
+                rotulo_y=meta["rotulo_y"],
+                min_y=meta["min_y"],
+                max_y=meta["max_y"],
+                series_ativas=self.plot_widget.obter_series_boxplot_ativas(),
+                cores_series={"Bosque": "#2ca02c", "Estacionamento": "#d95f02", "Ambiente A": "#3b82f6", "Ambiente B": "#f59e0b"},
+                fonte_nome=cfg["opcao_fonte"],
+                tamanho_fonte=cfg["tamanho_fonte"],
+                bordas_config=bordas_config,
+                ticks_config=ticks_config,
+                legenda_config=legenda_config,
+                exibir_grade=cfg["exibir_grade"],
+                largura_box=cfg.get("largura_box", 0.5),
+                mostrar_medias=cfg.get("mostrar_medias", True),
+                mostrar_outliers=cfg.get("mostrar_outliers", True),
+                mostrar_pontos=cfg.get("mostrar_pontos_jitter", False),
+                intervalo_ticks_y=float(cfg.get("intervalo_ticks_y", 0.0)),
+                fig=self.plot_widget.fig,
             )
         else:
             renderizar_grafico_barras(

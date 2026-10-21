@@ -846,3 +846,145 @@ def renderizar_grafico_dispersao(
     fig.tight_layout()
     return fig
 
+
+
+def renderizar_grafico_boxplot(
+    df: pd.DataFrame,
+    titulo_grafico: str,
+    rotulo_x: str,
+    rotulo_y: str,
+    min_y: float,
+    max_y: float,
+    series_ativas: list,
+    cores_series: dict,
+    fonte_nome: str,
+    tamanho_fonte: float,
+    bordas_config: dict,
+    ticks_config: dict,
+    legenda_config: dict,
+    exibir_grade: bool,
+    largura_box: float = 0.5,
+    mostrar_medias: bool = True,
+    mostrar_outliers: bool = True,
+    mostrar_pontos: bool = False,
+    intervalo_ticks_y: float = 0.0,
+    fig=None,
+):
+    """
+    Renderiza o Gráfico de Boxplot (Distribuição Térmica, Mediana, Quartis Q1/Q3 e Outliers)
+    no padrão editorial OriginLab Pro / Nature.
+    """
+    configurar_fonte_matplotlib(fonte_nome)
+
+    if fig is None:
+        fig, ax = plt.subplots(figsize=(7.4, 4.6), dpi=200)
+    else:
+        fig.clear()
+        ax = fig.add_subplot(111)
+
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
+
+    candidatas = [c for c in df.columns if c.lower() not in ["ponto", "pontos", "mes", "mês", "id"]]
+    cols_plot = [c for c in candidatas if c in series_ativas]
+    if not cols_plot:
+        cols_plot = candidatas if candidatas else list(df.columns)
+
+    dados_plot = []
+    labels_plot = []
+    todos_valores = []
+
+    for c in cols_plot:
+        s = pd.to_numeric(df[c], errors="coerce").dropna().values
+        if len(s) > 0:
+            dados_plot.append(s)
+            labels_plot.append(c)
+            todos_valores.extend(s.tolist())
+
+    n_boxes = len(dados_plot)
+    if n_boxes > 0:
+        posicoes = np.arange(n_boxes)
+        bp = ax.boxplot(
+            dados_plot,
+            positions=posicoes,
+            widths=largura_box,
+            patch_artist=True,
+            showmeans=mostrar_medias,
+            showfliers=mostrar_outliers,
+            meanprops=dict(marker="D", markeredgecolor="black", markerfacecolor="white", markersize=6),
+            medianprops=dict(color="black", linewidth=1.5),
+            whiskerprops=dict(color="black", linewidth=1.1, linestyle="--"),
+            capprops=dict(color="black", linewidth=1.2),
+            flierprops=dict(marker="o", markerfacecolor="#e74c3c", markeredgecolor="black", markersize=5),
+            zorder=3
+        )
+
+        for idx, (patch, col_name) in enumerate(zip(bp["boxes"], labels_plot)):
+            cor = cores_series.get(col_name, "#3b82f6")
+            patch.set_facecolor(cor)
+            patch.set_edgecolor("black")
+            patch.set_linewidth(1.1)
+
+        if mostrar_pontos:
+            for idx, s in enumerate(dados_plot):
+                jitter = np.random.normal(0, 0.04, size=len(s))
+                ax.scatter(posicoes[idx] + jitter, s, color="#222222", alpha=0.5, s=20, zorder=4, edgecolor="none")
+
+        ax.set_xticks(posicoes)
+        ax.set_xticklabels(labels_plot, fontsize=tamanho_fonte - 0.5)
+        ax.set_xlim(-0.6, n_boxes - 0.4)
+    else:
+        ax.text(0.5, 0.5, "Sem dados suficientes para gerar Boxplot", ha="center", va="center", transform=ax.transAxes)
+
+    if todos_valores:
+        vmin = min(todos_valores)
+        vmax = max(todos_valores)
+        margem = (vmax - vmin) * 0.12 if vmax > vmin else 2.0
+        pad_min = (float(min_y) if min_y is not None else (int((vmin - margem) // 2) * 2))
+        pad_max = (float(max_y) if max_y is not None else (int(np.ceil((vmax + margem) / 2)) * 2))
+        if pad_max <= pad_min:
+            pad_max = pad_min + 5.0
+        ax.set_ylim(pad_min, pad_max)
+    elif min_y is not None and max_y is not None:
+        ax.set_ylim(float(min_y), max(float(max_y), float(min_y) + 5.0))
+        pad_min, pad_max = float(min_y), float(max_y)
+    else:
+        pad_min, pad_max = 0.0, 35.0
+        ax.set_ylim(pad_min, pad_max)
+
+    passo_y = calcular_passo_ticks_y(pad_min, pad_max, intervalo_ticks_y)
+    ax.yaxis.set_major_locator(ticker.MultipleLocator(passo_y))
+
+    cor_borda = bordas_config.get("cor", "black")
+    esp_borda = bordas_config.get("espessura", 1.0)
+    for s_name in ["top", "right", "bottom", "left"]:
+        ax.spines[s_name].set_visible(bordas_config.get(s_name if s_name != "bottom" else "baixo", True))
+        ax.spines[s_name].set_color(cor_borda)
+        ax.spines[s_name].set_linewidth(esp_borda)
+
+    direcao_t = ticks_config.get("direcao", "out")
+    ax.tick_params(
+        which="major", direction=direcao_t,
+        top=ticks_config.get("topo", False), right=ticks_config.get("direita", False),
+        bottom=ticks_config.get("baixo", True), left=ticks_config.get("esquerda", True),
+        length=5.0, width=1.0, color=cor_borda, labelsize=tamanho_fonte - 0.5
+    )
+
+    if ticks_config.get("minor_ticks", True):
+        ax.yaxis.set_minor_locator(ticker.AutoMinorLocator(2))
+        ax.tick_params(which="minor", direction=direcao_t, length=2.8, width=0.8, color=cor_borda)
+
+    if exibir_grade:
+        ax.grid(True, axis="y", color="#e0e0e0", linestyle="--", linewidth=0.6, zorder=0)
+    else:
+        ax.grid(False)
+
+    ax.set_xlabel(rotulo_x, fontsize=tamanho_fonte + 0.5, color="black", labelpad=8)
+    ax.set_ylabel(rotulo_y, fontsize=tamanho_fonte, color="black", labelpad=8)
+
+    if titulo_grafico and titulo_grafico.strip():
+        pad_val = 12 if bordas_config.get("topo", True) else 22
+        ax.set_title(titulo_grafico, fontsize=tamanho_fonte + 1.5, color="black", pad=pad_val, fontweight="normal")
+
+    fig.tight_layout()
+    return fig

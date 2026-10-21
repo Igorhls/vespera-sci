@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from config.presets import PRESETS_BARRAS, PRESETS_DISPERSAO, PRESETS_LINHAS
+from config.presets import PRESETS_BARRAS, PRESETS_BOXPLOT, PRESETS_DISPERSAO, PRESETS_LINHAS
 from config.themes import (
     COORDENADAS_LEGENDA_PRESET,
     DEFAULT_CONFIG,
@@ -151,12 +151,14 @@ class SidebarControlsWidget(QScrollArea):
         opcoes_preset = (
             ["Carregar modelo pré-cadastrado..."]
             + list(PRESETS_DISPERSAO.keys())
+            + list(PRESETS_BOXPLOT.keys())
             + list(PRESETS_LINHAS.keys())
             + list(PRESETS_BARRAS.keys())
             + [
                 "Criar Novo — Dispersão (X vs Y)",
                 "Criar Novo — Linhas (Pontos P1–P10)",
                 "Criar Novo — Barras (Média e Desvio)",
+                "Criar Novo — Boxplot (Distribuição)",
             ]
         )
         self.cmb_presets.addItems(opcoes_preset)
@@ -456,6 +458,44 @@ class SidebarControlsWidget(QScrollArea):
 
         self.grp_opcoes_dispersao.setVisible(False)
         l_estilo.addWidget(self.grp_opcoes_dispersao)
+
+        # Opções Boxplot e Distribuição
+        self.grp_opcoes_boxplot = QGroupBox("Opções de Boxplot e Distribuição")
+        ob_layout = QVBoxLayout(self.grp_opcoes_boxplot)
+        ob_layout.setSpacing(6)
+
+        self.chk_mostrar_medias = QCheckBox("Exibir Marcador de Média (Losango)")
+        self.chk_mostrar_medias.setChecked(True)
+        self.chk_mostrar_medias.toggled.connect(self._emit_change)
+        ob_layout.addWidget(self.chk_mostrar_medias)
+
+        self.chk_mostrar_outliers = QCheckBox("Destacar Outliers (Discrepantes)")
+        self.chk_mostrar_outliers.setChecked(True)
+        self.chk_mostrar_outliers.toggled.connect(self._emit_change)
+        ob_layout.addWidget(self.chk_mostrar_outliers)
+
+        self.chk_mostrar_pontos_jitter = QCheckBox("Sobrepor Pontos Amostrais (Jitter)")
+        self.chk_mostrar_pontos_jitter.setChecked(False)
+        self.chk_mostrar_pontos_jitter.toggled.connect(self._emit_change)
+        ob_layout.addWidget(self.chk_mostrar_pontos_jitter)
+
+        form_box = QFormLayout()
+        form_box.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        form_box.setLabelAlignment(Qt.AlignLeft)
+        form_box.setHorizontalSpacing(8)
+        form_box.setVerticalSpacing(6)
+
+        self.spn_largura_box = QDoubleSpinBox()
+        self.spn_largura_box.setRange(0.1, 0.9)
+        self.spn_largura_box.setSingleStep(0.05)
+        self.spn_largura_box.setValue(0.5)
+        self.spn_largura_box.valueChanged.connect(self._emit_change)
+
+        form_box.addRow("Largura das Caixas:", self.spn_largura_box)
+        ob_layout.addLayout(form_box)
+
+        self.grp_opcoes_boxplot.setVisible(False)
+        l_estilo.addWidget(self.grp_opcoes_boxplot)
 
         l_estilo.addStretch()
         self.tab_estilos.addTab(tab_estilo, get_icon("type", size=15), "Estilo")
@@ -763,6 +803,7 @@ class SidebarControlsWidget(QScrollArea):
         is_linhas = tipo_grafico == "linhas"
         is_barras = tipo_grafico == "barras"
         is_dispersao = tipo_grafico == "dispersao"
+        is_boxplot = tipo_grafico == "boxplot"
 
         self.rb_linhas.setChecked(is_linhas)
         self.rb_barras.setChecked(is_barras)
@@ -777,6 +818,7 @@ class SidebarControlsWidget(QScrollArea):
 
         self.grp_cores_dispersao.setVisible(is_dispersao)
         self.grp_opcoes_dispersao.setVisible(is_dispersao)
+        self.grp_opcoes_boxplot.setVisible(is_boxplot)
         self.chk_grade_dispersao.setVisible(is_dispersao)
 
         self.lbl_form_tick_x.setVisible(is_dispersao)
@@ -966,6 +1008,11 @@ class SidebarControlsWidget(QScrollArea):
             "intervalo_ticks_x": float(self.spn_intervalo_ticks_x.value()),
             "rotulo_x": self.txt_rotulo_x.text(),
             "rotulo_y": self.txt_rotulo_y.text(),
+            # Boxplot
+            "largura_box": float(self.spn_largura_box.value()),
+            "mostrar_medias": self.chk_mostrar_medias.isChecked(),
+            "mostrar_outliers": self.chk_mostrar_outliers.isChecked(),
+            "mostrar_pontos_jitter": self.chk_mostrar_pontos_jitter.isChecked(),
             "hachura_bosque": MAPA_HACHURAS.get(self.cmb_hachura_bosque.currentText()),
             "hachura_desvio_bosque": MAPA_HACHURAS.get(self.cmb_hachura_db.currentText()),
             "hachura_estacionamento": MAPA_HACHURAS.get(self.cmb_hachura_estac.currentText()),

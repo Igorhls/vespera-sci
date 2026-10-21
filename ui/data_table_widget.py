@@ -1,20 +1,22 @@
 """
-Widget de edição tabular de dados experimentais (Linhas P1..Pn e Barras TA).
-Repaginação visual completa: ícones vetoriais SVG, sem emojis, abas modernas e altura total para a tabela.
+Widget de edição tabular de dados experimentais com atalhos de produtividade:
+- Colagem direta Ctrl+V no grid (estilo Excel/Google Sheets)
+- Histórico de Desfazer/Refazer (Ctrl+Z / Ctrl+Y)
+- Destaque visual suave em amarelo âmbar para células vazias / NaN
+- Suporte completo a Linhas, Barras, Dispersão e Boxplot
 """
 
 import numpy as np
 import pandas as pd
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QColor, QKeySequence
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
     QComboBox,
     QDoubleSpinBox,
-    QFormLayout,
     QFrame,
     QGridLayout,
-    QGroupBox,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -28,8 +30,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from config.presets import PRESETS_BARRAS, PRESETS_DISPERSAO
+from config.presets import PRESETS_BARRAS, PRESETS_BOXPLOT, PRESETS_DISPERSAO
 from core.sanitizer import (
+    calcular_estatisticas_boxplot,
     calcular_estatisticas_serie,
     calcular_regressao_linear,
     formatar_numero_ptbr,
@@ -38,6 +41,48 @@ from core.sanitizer import (
     sanitizar_dados_tabela,
 )
 from ui.icons import get_icon
+
+
+class VesperaTable(QTableWidget):
+    """QTableWidget aprimorado com interceptação de atalhos Ctrl+V, Ctrl+Z e Ctrl+Y."""
+
+    pasteRequested = Signal(str)
+    undoRequested = Signal()
+    redoRequested = Signal()
+
+    def keyPressEvent(self, event):
+        # Atalho de Colar Direto (Ctrl+V ou Shift+Insert)
+        if event.matches(QKeySequence.Paste) or (
+            event.modifiers() & Qt.ControlModifier and event.key() == Qt.Key_V
+        ):
+            texto = QApplication.clipboard().text()
+            if texto:
+                self.pasteRequested.emit(texto)
+                return
+
+        # Atalho de Desfazer (Ctrl+Z)
+        elif event.matches(QKeySequence.Undo) or (
+            event.modifiers() & Qt.ControlModifier
+            and event.key() == Qt.Key_Z
+            and not (event.modifiers() & Qt.ShiftModifier)
+        ):
+            self.undoRequested.emit()
+            return
+
+        # Atalho de Refazer (Ctrl+Y ou Ctrl+Shift+Z)
+        elif (
+            event.matches(QKeySequence.Redo)
+            or (event.modifiers() & Qt.ControlModifier and event.key() == Qt.Key_Y)
+            or (
+                event.modifiers() & Qt.ControlModifier
+                and event.key() == Qt.Key_Z
+                and (event.modifiers() & Qt.ShiftModifier)
+            )
+        ):
+            self.redoRequested.emit()
+            return
+
+        super().keyPressEvent(event)
 
 
 class DataTableWidget(QWidget):
@@ -51,11 +96,18 @@ class DataTableWidget(QWidget):
         self._updating_ui = False
         self.tipo_grafico = "linhas"
         self.setMinimumWidth(560)
+
+        # Pilhas de histórico para Desfazer / Refazer
+        self._undo_stack = []
+        self._redo_stack = []
+        self._last_saved_state = None
+
         self.df_linhas = pd.DataFrame(columns=["Pontos", "Manha", "Tarde", "Noite"])
         self.df_barras = pd.DataFrame(
             columns=["Mes", "Bosque", "Desvio_Bosque", "Estacionamento", "Desvio_Estacionamento"]
         )
         self.df_dispersao = pd.DataFrame(columns=["Ponto", "X", "Y"])
+        self.df_boxplot = PRESETS_BOXPLOT["Distribuição Térmica — Bosque vs. Estacionamento"]["df"].copy()
 
         self._build_ui()
 
@@ -236,7 +288,7 @@ class DataTableWidget(QWidget):
         self.grp_rotulos_barras.setVisible(False)
         layout_dados.addWidget(self.grp_rotulos_barras)
 
-        # 3. Barra de Ferramentas da Tabela com Ícones Vetoriais
+        # 3. Barra de Ferramentas da Tabela com Desfazer/Refazer e Ícones Vetoriais
         hl_table_btns = QHBoxLayout()
         hl_table_btns.setSpacing(6)
 
@@ -249,6 +301,20 @@ class DataTableWidget(QWidget):
         self.btn_del_row.setIcon(get_icon("minus", size=15))
         self.btn_del_row.setCursor(Qt.PointingHandCursor)
         self.btn_del_row.clicked.connect(self._remover_linha)
+
+        self.btn_undo = QPushButton("Desfazer")
+        self.btn_undo.setIcon(get_icon("undo", size=15))
+        self.btn_undo.setToolTip("Desfazer última alteração (Ctrl+Z)")
+        self.btn_undo.setCursor(Qt.PointingHandCursor)
+        self.btn_undo.setEnabled(False)
+        self.btn_undo.clicked.connect(self._desfazer)
+
+        self.btn_redo = QPushButton("Refazer")
+        self.btn_redo.setIcon(get_icon("redo", size=15))
+        self.btn_redo.setToolTip("Refazer última alteração (Ctrl+Y)")
+        self.btn_redo.setCursor(Qt.PointingHandCursor)
+        self.btn_redo.setEnabled(False)
+        self.btn_redo.clicked.connect(self._refazer)
 
         self.btn_renum = QPushButton("Renumerar")
         self.btn_renum.setIcon(get_icon("hash", size=15))
@@ -263,11 +329,14 @@ class DataTableWidget(QWidget):
         self.btn_ir_colar = QPushButton("Colar do Excel")
         self.btn_ir_colar.setIcon(get_icon("clipboard", size=15))
         self.btn_ir_colar.setObjectName("btnPrimary")
+        self.btn_ir_colar.setToolTip("Importador guiado ou cole direto no grid com Ctrl+V")
         self.btn_ir_colar.setCursor(Qt.PointingHandCursor)
         self.btn_ir_colar.clicked.connect(lambda: self.tabs.setCurrentIndex(3))
 
         hl_table_btns.addWidget(self.btn_add_row)
         hl_table_btns.addWidget(self.btn_del_row)
+        hl_table_btns.addWidget(self.btn_undo)
+        hl_table_btns.addWidget(self.btn_redo)
         hl_table_btns.addWidget(self.btn_renum)
         hl_table_btns.addWidget(self.btn_padronizar)
         hl_table_btns.addStretch()
@@ -275,12 +344,15 @@ class DataTableWidget(QWidget):
 
         layout_dados.addLayout(hl_table_btns)
 
-        # 4. Tabela de Dados Principal (Altura total desimpedida)
-        self.table = QTableWidget()
+        # 4. Tabela de Dados Principal com Suporte a Ctrl+V Direto
+        self.table = VesperaTable()
         self.table.setAlternatingRowColors(True)
         self.table.setSelectionBehavior(QAbstractItemView.SelectItems)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.itemChanged.connect(self._on_table_item_changed)
+        self.table.pasteRequested.connect(self._colar_direto_tabela)
+        self.table.undoRequested.connect(self._desfazer)
+        self.table.redoRequested.connect(self._refazer)
         layout_dados.addWidget(self.table, stretch=1)
 
         self.tabs.addTab(tab_dados, get_icon("table", size=16), "Matriz de Dados")
@@ -418,6 +490,117 @@ class DataTableWidget(QWidget):
         self.btn_toggle_paste = QPushButton()
         self.grp_paste = QWidget()
 
+    # -----------------------------------------------------------------------
+    # Sistema de Histórico: Desfazer / Refazer (Undo / Redo)
+    # -----------------------------------------------------------------------
+    def _push_undo_state(self):
+        df_atual = self.obter_dataframe_atual()
+        if not self._undo_stack or not self._undo_stack[-1].equals(df_atual):
+            self._undo_stack.append(df_atual.copy())
+            if len(self._undo_stack) > 60:
+                self._undo_stack.pop(0)
+            self._redo_stack.clear()
+            self._update_undo_redo_buttons()
+
+    def _desfazer(self):
+        if not self._undo_stack:
+            return
+        df_atual = self.obter_dataframe_atual()
+        self._redo_stack.append(df_atual.copy())
+        df_restaurado = self._undo_stack.pop()
+        self._restaurar_dataframe(df_restaurado)
+        self._update_undo_redo_buttons()
+
+    def _refazer(self):
+        if not self._redo_stack:
+            return
+        df_atual = self.obter_dataframe_atual()
+        self._undo_stack.append(df_atual.copy())
+        df_restaurado = self._redo_stack.pop()
+        self._restaurar_dataframe(df_restaurado)
+        self._update_undo_redo_buttons()
+
+    def _update_undo_redo_buttons(self):
+        self.btn_undo.setEnabled(len(self._undo_stack) > 0)
+        self.btn_redo.setEnabled(len(self._redo_stack) > 0)
+
+    def _restaurar_dataframe(self, df: pd.DataFrame):
+        self._updating_ui = True
+        if self.tipo_grafico == "linhas":
+            self.df_linhas = df.copy()
+        elif self.tipo_grafico == "barras":
+            self.df_barras = df.copy()
+        elif self.tipo_grafico == "dispersao":
+            self.df_dispersao = df.copy()
+        else:
+            self.df_boxplot = df.copy()
+        self._updating_ui = False
+        self._popular_tabela()
+        self.atualizar_sumario_estatistico()
+        self.dataOrMetaChanged.emit()
+
+    # -----------------------------------------------------------------------
+    # Colagem Direta no Grid (Ctrl+V)
+    # -----------------------------------------------------------------------
+    def _colar_direto_tabela(self, texto: str):
+        linhas = [l.strip() for l in texto.replace("\r\n", "\n").replace("\r", "\n").split("\n") if l.strip()]
+        if not linhas:
+            return
+
+        self._push_undo_state()
+
+        r_start = max(0, self.table.currentRow())
+        c_start = max(0, self.table.currentColumn())
+
+        # Se houver apenas números e o usuário estiver na coluna 0 (ID), iniciar na coluna 1
+        primeira_linha = linhas[0]
+        delimitador = "\t" if "\t" in primeira_linha else (";" if ";" in primeira_linha else ",")
+        partes_primeira = [p.strip() for p in primeira_linha.split(delimitador)]
+        try:
+            float(partes_primeira[0].replace(",", "."))
+            e_puramente_numerico = True
+        except ValueError:
+            e_puramente_numerico = False
+
+        if e_puramente_numerico and c_start == 0 and len(partes_primeira) < self.table.columnCount():
+            c_start = 1
+
+        total_linhas_necessarias = r_start + len(linhas)
+        while self.table.rowCount() < total_linhas_necessarias:
+            self._adicionar_linha()
+
+        self._updating_ui = True
+        for i_row, linha in enumerate(linhas):
+            curr_r = r_start + i_row
+            delimitador = "\t" if "\t" in linha else (";" if ";" in linha else ",")
+            valores = [v.strip() for v in linha.split(delimitador)]
+            for i_col, val in enumerate(valores):
+                curr_c = c_start + i_col
+                if curr_c >= self.table.columnCount():
+                    break
+                # Sanitização básica de vírgula e escala
+                if curr_c > 0:
+                    val_clean = val.replace(",", ".")
+                    try:
+                        v_num = float(val_clean)
+                        if 60.0 < v_num <= 600.0 and self.tipo_grafico in ["linhas", "boxplot"]:
+                            v_num /= 10.0
+                        val = f"{v_num:.2f}".replace(".", ",")
+                    except ValueError:
+                        pass
+                item = self.table.item(curr_r, curr_c)
+                if not item:
+                    item = QTableWidgetItem()
+                    item.setTextAlignment(Qt.AlignCenter)
+                    self.table.setItem(curr_r, curr_c, item)
+                item.setText(val)
+
+        self._updating_ui = False
+        self._ler_dataframe_da_tabela()
+        self._popular_tabela()
+        self.atualizar_sumario_estatistico()
+        self.dataOrMetaChanged.emit()
+
     def _copiar_resumo_estatistico(self):
         txt = self.lbl_stats.text().replace("<br>", "\n").replace("<b>", "").replace("</b>", "").replace("&nbsp;", " ")
         QApplication.clipboard().setText(txt)
@@ -431,6 +614,7 @@ class DataTableWidget(QWidget):
         is_linhas = tipo_grafico == "linhas"
         is_barras = tipo_grafico == "barras"
         is_dispersao = tipo_grafico == "dispersao"
+        is_boxplot = tipo_grafico == "boxplot"
 
         self.grp_rotulos_barras.setVisible(is_barras)
         self.lbl_destino.setVisible(is_linhas)
@@ -451,11 +635,17 @@ class DataTableWidget(QWidget):
             self.txt_paste.setPlaceholderText(
                 "Agosto\t27,32\t2,3\t28,5\t4,87\nDezembro\t28,6\t1,42\t29,4\t2,19"
             )
-        else:
+        elif is_dispersao:
             self.lbl_tit_dia.setText("<b>Título / Variáveis:</b>")
             self.btn_renum.setText("Renumerar Pontos (P1..Pn)")
             self.txt_paste.setPlaceholderText(
                 "Cole dados de 2 colunas (X e Y) ou 3 colunas (Ponto, X, Y):\n34,2\t35,4\n34,7\t36,4\n34,9\t36,4\n..."
+            )
+        else:
+            self.lbl_tit_dia.setText("<b>Identificador / Título:</b>")
+            self.btn_renum.setText("Renumerar Amostras")
+            self.txt_paste.setPlaceholderText(
+                "Cole colunas de medições contínuas:\nP1\t26,2\t28,5\nP2\t26,5\t29,0\n..."
             )
 
         self._updating_ui = False
@@ -478,15 +668,17 @@ class DataTableWidget(QWidget):
             self.df_linhas = df.copy()
         elif tipo_grafico == "barras":
             self.df_barras = df.copy()
-        else:
+        elif tipo_grafico == "dispersao":
             self.df_dispersao = df.copy()
+        else:
+            self.df_boxplot = df.copy()
 
         self.txt_titulo_dia.setText(str(titulo_dia or ""))
         self.txt_titulo_grafico.setText(str(titulo_grafico or ""))
-        self.txt_rotulo_x.setText(str(cfg.get("rotulo_x", "Pontos" if tipo_grafico == "linhas" else ("TA" if tipo_grafico == "barras" else "URA (%)"))))
+        self.txt_rotulo_x.setText(str(cfg.get("rotulo_x", "Pontos" if tipo_grafico == "linhas" else ("TA" if tipo_grafico == "barras" else ("Ambientes" if tipo_grafico == "boxplot" else "URA (%)")))))
         self.txt_rotulo_y.setText(str(cfg.get("rotulo_y", "Temperatura do ar (°C)")))
-        self.spn_min_y.setValue(float(min_y if min_y is not None else (34.5 if tipo_grafico == "dispersao" else 24.0)))
-        self.spn_max_y.setValue(float(max_y if max_y is not None else (38.0 if tipo_grafico == "dispersao" else 33.0)))
+        self.spn_min_y.setValue(float(min_y if min_y is not None else (34.5 if tipo_grafico == "dispersao" else 20.0)))
+        self.spn_max_y.setValue(float(max_y if max_y is not None else (38.0 if tipo_grafico == "dispersao" else 36.0)))
         self.spn_intervalo_ticks_y.setValue(float(cfg.get("intervalo_ticks_y", 0.0)))
 
         min_x_val = cfg.get("min_x")
@@ -536,25 +728,34 @@ class DataTableWidget(QWidget):
                 self.txt_rs4.text() or "Desvio/p",
             ]
             fmt_dec = "{:.2f}"
-        else:
+        elif self.tipo_grafico == "dispersao":
             df = self.df_dispersao
             colunas_internas = ["Ponto", "X", "Y"]
             nom_x = self.txt_rotulo_x.text().strip() or "X"
             nom_y = self.txt_rotulo_y.text().strip() or "Y"
             cabecalhos = ["Ponto", f"X ({nom_x})", f"Y ({nom_y})"]
             fmt_dec = "{:.2f}"
+        else:
+            df = self.df_boxplot
+            colunas_internas = list(df.columns)
+            cabecalhos = [f"{c} (°C)" if c.lower() not in ["ponto", "pontos", "id"] else c for c in colunas_internas]
+            fmt_dec = "{:.2f}"
 
         self.table.setColumnCount(len(colunas_internas))
         self.table.setHorizontalHeaderLabels(cabecalhos)
         self.table.setRowCount(len(df))
 
+        # Cor de destaque suave para valores ausentes / NaN (Amber 100)
+        cor_nan = QColor(254, 243, 199, 210)
+
         for r_idx in range(len(df)):
             for c_idx, col_name in enumerate(colunas_internas):
                 val = df.iloc[r_idx].get(col_name, "")
+                e_vazio_ou_nan = pd.isna(val) or val == ""
                 if c_idx == 0:
-                    texto = "" if pd.isna(val) else str(val)
+                    texto = "" if e_vazio_ou_nan else str(val)
                 else:
-                    if pd.isna(val) or val == "":
+                    if e_vazio_ou_nan:
                         texto = ""
                     else:
                         try:
@@ -563,6 +764,12 @@ class DataTableWidget(QWidget):
                             texto = str(val)
                 item = QTableWidgetItem(texto)
                 item.setTextAlignment(Qt.AlignCenter)
+
+                # Destaque visual âmbar em células numéricas com NaN / ausentes
+                if c_idx > 0 and (e_vazio_ou_nan or texto == ""):
+                    item.setBackground(cor_nan)
+                    item.setToolTip("Dado ausente (NaN / Vazio)")
+
                 self.table.setItem(r_idx, c_idx, item)
 
         self._updating_ui = False
@@ -573,8 +780,10 @@ class DataTableWidget(QWidget):
             colunas = ["Pontos", "Manha", "Tarde", "Noite"]
         elif self.tipo_grafico == "barras":
             colunas = ["Mes", "Bosque", "Desvio_Bosque", "Estacionamento", "Desvio_Estacionamento"]
-        else:
+        elif self.tipo_grafico == "dispersao":
             colunas = ["Ponto", "X", "Y"]
+        else:
+            colunas = list(self.df_boxplot.columns)
 
         dados = []
         for r in range(rows):
@@ -583,7 +792,7 @@ class DataTableWidget(QWidget):
                 item = self.table.item(r, c)
                 txt = item.text().strip() if item else ""
                 if c == 0:
-                    padrao_id = f"P{r+1}" if self.tipo_grafico in ["linhas", "dispersao"] else f"Mês {r+1}"
+                    padrao_id = f"P{r+1}" if self.tipo_grafico in ["linhas", "dispersao", "boxplot"] else f"Mês {r+1}"
                     linha[col_name] = txt or padrao_id
                 else:
                     if not txt:
@@ -604,18 +813,23 @@ class DataTableWidget(QWidget):
             df_san, _ = sanitizar_dados_barras(df_lido)
             self.df_barras = df_san
             return df_san
-        else:
+        elif self.tipo_grafico == "dispersao":
             df_san, _ = sanitizar_dados_dispersao(df_lido)
             self.df_dispersao = df_san
             return df_san
+        else:
+            self.df_boxplot = df_lido
+            return df_lido
 
     def obter_dataframe_atual(self) -> pd.DataFrame:
         if self.tipo_grafico == "linhas":
             return self.df_linhas.copy()
         elif self.tipo_grafico == "barras":
             return self.df_barras.copy()
-        else:
+        elif self.tipo_grafico == "dispersao":
             return self.df_dispersao.copy()
+        else:
+            return self.df_boxplot.copy()
 
     def obter_metadados(self) -> dict:
         return {
@@ -636,10 +850,29 @@ class DataTableWidget(QWidget):
             "espaco_subgrupos_barras": float(self.spn_espaco_subgrupos.value()),
         }
 
-    def _on_table_item_changed(self, _item):
+    def _on_table_item_changed(self, item):
         if self._updating_ui:
             return
-        self._ler_dataframe_da_tabela()
+        # Salva estado para Desfazer caso tenha havido edição real
+        prev_df = self.obter_dataframe_atual()
+        df_novo = self._ler_dataframe_da_tabela()
+        if not prev_df.equals(df_novo):
+            self._undo_stack.append(prev_df.copy())
+            if len(self._undo_stack) > 60:
+                self._undo_stack.pop(0)
+            self._redo_stack.clear()
+            self._update_undo_redo_buttons()
+
+        # Atualiza cor da célula caso o usuário tenha preenchido ou esvaziado
+        if item and item.column() > 0:
+            txt = item.text().strip()
+            if not txt:
+                item.setBackground(QColor(254, 243, 199, 210))
+                item.setToolTip("Dado ausente (NaN / Vazio)")
+            else:
+                item.setData(Qt.BackgroundRole, None)
+                item.setToolTip("")
+
         self.atualizar_sumario_estatistico()
         self.dataOrMetaChanged.emit()
 
@@ -662,6 +895,7 @@ class DataTableWidget(QWidget):
         self.dataOrMetaChanged.emit()
 
     def _adicionar_linha(self):
+        self._push_undo_state()
         df = self._ler_dataframe_da_tabela()
         if self.tipo_grafico == "linhas":
             novo = pd.DataFrame(
@@ -679,9 +913,16 @@ class DataTableWidget(QWidget):
                 }
             ])
             self.df_barras = pd.concat([df, novo], ignore_index=True)
-        else:
+        elif self.tipo_grafico == "dispersao":
             novo = pd.DataFrame([{"Ponto": f"P{len(df)+1}", "X": 35.0, "Y": 36.0}])
             self.df_dispersao = pd.concat([df, novo], ignore_index=True)
+        else:
+            nova_dict = {"Ponto": f"P{len(df)+1}"}
+            for c in df.columns:
+                if c.lower() not in ["ponto", "pontos", "id"]:
+                    nova_dict[c] = 27.5
+            novo = pd.DataFrame([nova_dict])
+            self.df_boxplot = pd.concat([df, novo], ignore_index=True)
 
         self._popular_tabela()
         self.atualizar_sumario_estatistico()
@@ -692,20 +933,24 @@ class DataTableWidget(QWidget):
         df = self._ler_dataframe_da_tabela()
         if len(df) <= 1:
             return
+        self._push_undo_state()
         idx_remover = row if row >= 0 else len(df) - 1
         df_novo = df.drop(df.index[idx_remover]).reset_index(drop=True)
         if self.tipo_grafico == "linhas":
             self.df_linhas = df_novo
         elif self.tipo_grafico == "barras":
             self.df_barras = df_novo
-        else:
+        elif self.tipo_grafico == "dispersao":
             self.df_dispersao = df_novo
+        else:
+            self.df_boxplot = df_novo
 
         self._popular_tabela()
         self.atualizar_sumario_estatistico()
         self.dataOrMetaChanged.emit()
 
     def _renumerar_pontos(self):
+        self._push_undo_state()
         if self.tipo_grafico == "linhas":
             df = self._ler_dataframe_da_tabela()
             df["Pontos"] = [f"P{i+1}" for i in range(len(df))]
@@ -714,17 +959,23 @@ class DataTableWidget(QWidget):
             self.df_barras = PRESETS_BARRAS["TA — Média e Desvio Padrão (Agosto e Dezembro)"]["df"].copy()
             self.spn_min_y.setValue(0.0)
             self.spn_max_y.setValue(35.0)
-        else:
+        elif self.tipo_grafico == "dispersao":
             df = self._ler_dataframe_da_tabela()
             col_p = "Ponto" if "Ponto" in df.columns else df.columns[0]
             df[col_p] = [f"P{i+1}" for i in range(len(df))]
             self.df_dispersao = df
+        else:
+            df = self._ler_dataframe_da_tabela()
+            col_p = "Ponto" if "Ponto" in df.columns else df.columns[0]
+            df[col_p] = [f"P{i+1}" for i in range(len(df))]
+            self.df_boxplot = df
 
         self._popular_tabela()
         self.atualizar_sumario_estatistico()
         self.dataOrMetaChanged.emit()
 
     def _padronizar_decimais(self):
+        self._push_undo_state()
         self._ler_dataframe_da_tabela()
         self._popular_tabela()
         self.atualizar_sumario_estatistico()
@@ -734,6 +985,7 @@ class DataTableWidget(QWidget):
         texto = self.txt_paste.toPlainText().strip()
         if not texto:
             return
+        self._push_undo_state()
         linhas_raw = [l.strip() for l in texto.split("\n") if l.strip()]
 
         if self.tipo_grafico == "linhas":
@@ -836,7 +1088,7 @@ class DataTableWidget(QWidget):
                 )
                 self.df_barras, _ = sanitizar_dados_barras(df_b)
 
-        else:
+        elif self.tipo_grafico == "dispersao":
             novas_disp = []
             for l in linhas_raw:
                 partes = [p.strip().replace(",", ".") for p in l.replace(";", "\t").split("\t") if p.strip()]
@@ -858,6 +1110,24 @@ class DataTableWidget(QWidget):
             if novas_disp:
                 df_disp = pd.DataFrame(novas_disp)
                 self.df_dispersao, _ = sanitizar_dados_dispersao(df_disp)
+
+        else:
+            novas_box = []
+            cols_atuais = list(self.df_boxplot.columns)
+            for l in linhas_raw:
+                partes = [p.strip().replace(",", ".") for p in l.replace(";", "\t").split("\t") if p.strip()]
+                p_nom = partes[0]
+                linha_dados = [p_nom]
+                for p in partes[1:len(cols_atuais)]:
+                    try:
+                        linha_dados.append(float(p))
+                    except ValueError:
+                        linha_dados.append(np.nan)
+                while len(linha_dados) < len(cols_atuais):
+                    linha_dados.append(np.nan)
+                novas_box.append(linha_dados)
+            if novas_box:
+                self.df_boxplot = pd.DataFrame(novas_box, columns=cols_atuais)
 
         self._popular_tabela()
         self.atualizar_sumario_estatistico()
@@ -914,12 +1184,16 @@ class DataTableWidget(QWidget):
                 de = formatar_numero_ptbr(row.get("Desvio_Estacionamento"))
                 linhas_txt.append(f"<b>{mes}:</b> {r1} = <b>{vb} (±{db})</b> &nbsp;|&nbsp; {r3} = <b>{ve} (±{de})</b>")
             self.lbl_stats.setText("<br><br>".join(linhas_txt) if linhas_txt else "Sem dados na tabela.")
-        else:
+        elif self.tipo_grafico == "dispersao":
             col_x = "X" if "X" in self.df_dispersao.columns else self.df_dispersao.columns[1]
             col_y = "Y" if "Y" in self.df_dispersao.columns else self.df_dispersao.columns[2]
             nom_x = self.txt_rotulo_x.text().strip() or "X"
             nom_y = self.txt_rotulo_y.text().strip() or "Y"
-            reg = calcular_regressao_linear(self.df_dispersao[col_x], self.df_dispersao[col_y]) if len(self.df_dispersao) >= 2 else {}
+            reg = (
+                calcular_regressao_linear(self.df_dispersao[col_x], self.df_dispersao[col_y])
+                if len(self.df_dispersao) >= 2
+                else {}
+            )
             if reg:
                 txt = (
                     f"<div style='line-height: 1.6;'>"
@@ -938,5 +1212,25 @@ class DataTableWidget(QWidget):
                 )
                 self.lbl_stats.setText(txt)
             else:
-                self.lbl_stats.setText("Insira ao menos 2 pares de dados numéricos (X e Y) na tabela para calcular a Regressão Linear e o R².")
-
+                self.lbl_stats.setText(
+                    "Insira ao menos 2 pares de dados numéricos (X e Y) na tabela para calcular a Regressão Linear e o R²."
+                )
+        else:
+            # Boxplot: Quartis, Mediana, IQR, Outliers
+            blocos_box = []
+            cols_num = [c for c in self.df_boxplot.columns if c.lower() not in ["ponto", "pontos", "id"]]
+            for col in cols_num:
+                est = calcular_estatisticas_boxplot(self.df_boxplot[col])
+                if est:
+                    outliers_txt = ", ".join(f"{v:.2f}" for v in est["outliers"]) if est["outliers"] else "Nenhum"
+                    blocos_box.append(
+                        f"<b>Ambiente / Série: {col}</b><br>"
+                        f"• <b>Mediana (Q2):</b> <b>{est['mediana']:.2f} °C</b> &nbsp;|&nbsp; "
+                        f"<b>Média:</b> {est['media']:.2f} °C (±{est['desvio']:.2f})<br>"
+                        f"• <b>Quartis:</b> Q1 (25%) = <b>{est['q1']:.2f} °C</b> &nbsp;|&nbsp; "
+                        f"Q3 (75%) = <b>{est['q3']:.2f} °C</b> &nbsp;|&nbsp; "
+                        f"<b>IQR (Interquartil):</b> {est['iqr']:.2f} °C<br>"
+                        f"• <b>Whiskers / Limites:</b> Mín = {est['minimo']:.1f} °C &nbsp;|&nbsp; Máx = {est['maximo']:.1f} °C<br>"
+                        f"• <b>Outliers Detectados:</b> <span style='color: {'#dc2626' if est['outliers'] else '#16a34a'}; font-weight: bold;'>{outliers_txt}</span> (N={est['n']})"
+                    )
+            self.lbl_stats.setText("<br><br>".join(blocos_box) if blocos_box else "Sem dados numéricos suficientes para calcular estatísticas de Boxplot.")

@@ -335,3 +335,58 @@ def gerar_excel_dispersao_bytes(
     buf.seek(0)
     return buf.getvalue()
 
+
+
+def gerar_excel_boxplot_bytes(
+    df: pd.DataFrame,
+    titulo_tabela: str,
+    titulo_grafico: str,
+    rotulo_x: str,
+    rotulo_y: str,
+    min_y: float = None,
+    max_y: float = None,
+) -> bytes:
+    """Gera planilha Excel (.xlsx) contendo os dados brutos e tabela estatística de quartis/mediana."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Dados Boxplot"
+
+    borda_fina = Border(
+        left=Side(style="thin", color="A6A6A6"),
+        right=Side(style="thin", color="A6A6A6"),
+        top=Side(style="thin", color="A6A6A6"),
+        bottom=Side(style="thin", color="A6A6A6"),
+    )
+
+    ws.merge_cells("B2:E2")
+    header = ws.cell(row=2, column=2, value=titulo_tabela or "Distribuição Térmica")
+    header.font = Font(name="Times New Roman", size=11, bold=True)
+    header.alignment = Alignment(horizontal="center", vertical="center")
+    for c in range(2, 6):
+        ws.cell(row=2, column=c).border = borda_fina
+
+    cols = list(df.columns)
+    for idx, col in enumerate(cols, start=2):
+        c = ws.cell(row=3, column=idx, value=str(col))
+        c.font = Font(name="Times New Roman", size=10, bold=True)
+        c.alignment = Alignment(horizontal="center", vertical="center")
+        c.border = borda_fina
+
+    for r_idx, row in df.iterrows():
+        r = 4 + r_idx
+        for col_idx, col_name in enumerate(cols, start=2):
+            val = row.get(col_name, np.nan)
+            cell = ws.cell(row=r, column=col_idx, value=float(val) if pd.notnull(val) and isinstance(val, (int, float)) else str(val) if pd.notnull(val) else None)
+            cell.alignment = Alignment(horizontal="center")
+            cell.border = borda_fina
+            if cell.value is not None and isinstance(cell.value, float):
+                cell.number_format = "0.0#"
+
+    ws.column_dimensions["A"].width = 3
+    for col_letter in ["B", "C", "D", "E", "F"]:
+        ws.column_dimensions[col_letter].width = 14
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf.getvalue()

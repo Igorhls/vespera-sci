@@ -217,3 +217,31 @@ def calcular_regressao_linear(x_vals, y_vals) -> dict:
         "max_y": float(np.max(y)),
     }
 
+
+
+def calcular_estatisticas_boxplot(valores) -> dict:
+    """Calcula estatísticas de distribuição para Boxplot: quartis, mediana, IQR e outliers."""
+    s = pd.to_numeric(pd.Series(valores), errors="coerce").dropna()
+    if s.empty:
+        return {}
+    q1 = float(s.quantile(0.25))
+    mediana = float(s.median())
+    q3 = float(s.quantile(0.75))
+    iqr = float(q3 - q1)
+    lower_b = q1 - 1.5 * iqr
+    upper_b = q3 + 1.5 * iqr
+    outliers = [float(v) for v in s[(s < lower_b) | (s > upper_b)].tolist()]
+    return {
+        "n": int(len(s)),
+        "media": float(s.mean()),
+        "desvio": float(s.std(ddof=1)) if len(s) >= 2 else 0.0,
+        "minimo": float(s.min()),
+        "maximo": float(s.max()),
+        "q1": q1,
+        "mediana": mediana,
+        "q3": q3,
+        "iqr": iqr,
+        "limite_inferior": lower_b,
+        "limite_superior": upper_b,
+        "outliers": outliers,
+    }

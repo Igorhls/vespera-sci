@@ -78,6 +78,15 @@ class PlotCanvasWidget(QWidget):
             series_layout.addWidget(chk)
 
         # Checkboxes modo dispersão
+        self.chk_box_bosque = QCheckBox("Bosque")
+        self.chk_box_estac = QCheckBox("Estacionamento")
+        for chk in (self.chk_box_bosque, self.chk_box_estac):
+            chk.setChecked(True)
+            chk.setVisible(False)
+            chk.setCursor(Qt.PointingHandCursor)
+            chk.toggled.connect(self._on_series_toggled)
+            series_layout.addWidget(chk)
+
         self.chk_pontos_disp = QCheckBox("Pontos (X, Y)")
         self.chk_reta_disp = QCheckBox("Linha de Regressão")
         self.chk_r2_disp = QCheckBox("R² no Gráfico")
@@ -146,6 +155,12 @@ class PlotCanvasWidget(QWidget):
         self.btn_pdf.setMinimumHeight(36)
         self.btn_pdf.clicked.connect(self._exportar_pdf)
 
+        self.btn_svg = QPushButton("Vetor SVG")
+        self.btn_svg.setIcon(get_icon("download", size=16))
+        self.btn_svg.setCursor(Qt.PointingHandCursor)
+        self.btn_svg.setMinimumHeight(36)
+        self.btn_svg.clicked.connect(self._exportar_svg)
+
         self.btn_excel = QPushButton("Planilha Excel (.xlsx)")
         self.btn_excel.setIcon(get_icon("file-spreadsheet", size=16))
         self.btn_excel.setCursor(Qt.PointingHandCursor)
@@ -154,6 +169,7 @@ class PlotCanvasWidget(QWidget):
 
         exp_layout.addWidget(self.btn_png)
         exp_layout.addWidget(self.btn_pdf)
+        exp_layout.addWidget(self.btn_svg)
         exp_layout.addWidget(self.btn_excel)
 
         layout.addWidget(frame_exp)
@@ -171,6 +187,10 @@ class PlotCanvasWidget(QWidget):
         is_linhas = tipo_grafico == "linhas"
         is_barras = tipo_grafico == "barras"
         is_dispersao = tipo_grafico == "dispersao"
+        is_boxplot = tipo_grafico == "boxplot"
+
+        for chk in (self.chk_box_bosque, self.chk_box_estac):
+            chk.setVisible(is_boxplot)
 
         for chk in (self.chk_manha, self.chk_tarde, self.chk_noite):
             chk.setVisible(is_linhas)
@@ -239,6 +259,14 @@ class PlotCanvasWidget(QWidget):
             ativas.append("Desvio_Estacionamento")
         return ativas
 
+    def obter_series_boxplot_ativas(self) -> list:
+        ativas = []
+        if self.chk_box_bosque.isChecked():
+            ativas.append("Bosque")
+        if self.chk_box_estac.isChecked():
+            ativas.append("Estacionamento")
+        return ativas
+
     def obter_series_dispersao_ativas(self) -> dict:
         return {
             "pontos": self.chk_pontos_disp.isChecked(),
@@ -290,3 +318,17 @@ class PlotCanvasWidget(QWidget):
         )
         if caminho:
             self.exportExcelRequested.emit(caminho)
+
+    def _exportar_svg(self):
+        caminho, _ = QFileDialog.getSaveFileName(
+            self,
+            "Salvar Figura Vetorial SVG",
+            f"{self._nome_base_padrao}_figura.svg",
+            "Vetor SVG (*.svg)",
+        )
+        if caminho:
+            try:
+                self.fig.savefig(caminho, format="svg", bbox_inches="tight")
+                QMessageBox.information(self, "Exportação Concluída", f"Arquivo vetorial SVG salvo com sucesso em:\n{caminho}")
+            except Exception as e:
+                QMessageBox.critical(self, "Erro ao Exportar SVG", str(e))
