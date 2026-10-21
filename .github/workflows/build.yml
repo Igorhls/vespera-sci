@@ -3,9 +3,13 @@ name: Multiplatform Build & Release
 on:
   push:
     branches: [ "main" ]
+    tags: [ "v*" ]
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   test:
@@ -185,3 +189,53 @@ jobs:
         with:
           name: VesperaSci-macOS-AppleSilicon-arm64
           path: dist/VesperaSci-macOS-AppleSilicon-arm64.dmg
+
+  publish-release:
+    name: Publish Official GitHub Release
+    if: github.event_name != 'pull_request'
+    needs: [build-windows, build-macos-intel, build-macos-arm]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all compiled artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release_assets
+
+      - name: Publish to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v1.0.0"
+          name: "Vespera Sci Alpha — v1.0.0"
+          draft: false
+          prerelease: false
+          make_latest: true
+          body: |
+            ## Vespera Sci Alpha — Scientific Plotting & Data Studio
+
+            Bem-vindo ao release oficial do **Vespera Sci Desktop**, o estúdio de gráficos científicos nos padrões OriginLab Pro / ABNT.
+
+            ### 📦 Instaladores Disponíveis para Download:
+            * **Windows (64-bit)**: [`VesperaSci-Windows-x64.zip`](https://github.com/${{ github.repository }}/releases/download/v1.0.0/VesperaSci-Windows-x64.zip) *(Extraia o arquivo .zip e execute o `VesperaSci.exe`)*
+            * **macOS Apple Silicon (M1/M2/M3/M4)**: [`VesperaSci-macOS-AppleSilicon-arm64.dmg`](https://github.com/${{ github.repository }}/releases/download/v1.0.0/VesperaSci-macOS-AppleSilicon-arm64.dmg) *(macOS 13 Ventura ou superior)*
+            * **macOS Intel (x86_64)**: [`VesperaSci-macOS-Intel-x86_64.dmg`](https://github.com/${{ github.repository }}/releases/download/v1.0.0/VesperaSci-macOS-Intel-x86_64.dmg) *(macOS 13 Ventura ou superior)*
+
+            ---
+            ### 🍎 Como Usar no Mac:
+            1. Abra o arquivo `.dmg` baixado e arraste o **Vespera Sci** para a pasta **Applications**.
+            2. Na primeira abertura, clique com o **botão direito > Abrir** (ou acesse *Ajustes do Sistema > Privacidade e Segurança > Abrir Mesmo Assim*).
+
+            ---
+            ### ✨ Principais Recursos:
+            - **Gráficos de Linhas e Pontos**: Séries temporais térmicas completas (Manhã, Tarde, Noite).
+            - **Gráficos de Barras com Desvio**: Médias e desvios padrão amostrais com padrões OriginLab hachurados.
+            - **Dispersão & Regressão Linear**: Ajuste de reta de regressão com cálculo em tempo real do $R^2$, Pearson e erro padrão.
+            - **Boxplot & Distribuição Térmica**: Quartis Q1/Q3, Mediana, Whiskers ($1{,}5 \times \text{IQR}$), médias e detecção de outliers.
+            - **Colagem Direta do Excel**: Atalho `Ctrl+V` diretamente sobre as células do grid.
+            - **Histórico Completo**: Desfazer e Refazer (`Ctrl+Z` / `Ctrl+Y`).
+            - **Exportação Multiformato**: PNG (300 DPI), Vetor PDF, Vetor SVG e planilhas nativas do Microsoft Excel (.xlsx).
+          files: |
+            release_assets/VesperaSci-Windows-x64/*
+            release_assets/VesperaSci-macOS-Intel-x86_64/*
+            release_assets/VesperaSci-macOS-AppleSilicon-arm64/*
