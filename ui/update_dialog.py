@@ -17,7 +17,9 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QTextBrowser,
     QVBoxLayout,
+    QWidget,
 )
 
 from core.updater import baixar_e_aplicar_atualizacao, verificar_atualizacao_github
@@ -65,8 +67,9 @@ class UpdateDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Atualizador de Software — Vespera Sci")
-        self.setMinimumWidth(560)
+        self.setWindowTitle("Atualizações e Sincronização — Vespera Sci")
+        self.resize(640, 560)
+        self.setMinimumSize(560, 480)
         self.setModal(True)
 
         self.settings = QSettings("VesperaSci", "VesperaSci")
@@ -84,128 +87,154 @@ class UpdateDialog(QDialog):
         self._iniciar_verificacao()
 
     def _build_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 18, 20, 18)
-        layout.setSpacing(14)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(18, 16, 18, 16)
+        root.setSpacing(12)
 
-        # Cabeçalho
-        header_layout = QHBoxLayout()
-        header_layout.setSpacing(10)
+        # 1. Cabeçalho com Ícone e Descrição
+        header = QHBoxLayout()
+        header.setSpacing(12)
+
         icon_lbl = QLabel()
-        icon_lbl.setPixmap(get_icon("github", size=24).pixmap(24, 24))
-        header_layout.addWidget(icon_lbl)
+        icon_lbl.setPixmap(get_icon("github", color="#2563eb", size=28).pixmap(28, 28))
+        header.addWidget(icon_lbl)
 
         title_box = QVBoxLayout()
         title_box.setSpacing(2)
-        lbl_header = QLabel("<b>Atualizações e Sincronização com o GitHub</b>")
-        lbl_header.setStyleSheet("font-size: 15px;")
-        lbl_sub = QLabel("Gerenciamento de versões estáveis e experimentais do Vespera Sci.")
-        lbl_sub.setStyleSheet("color: #64748b; font-size: 11.5px;")
-        title_box.addWidget(lbl_header)
+        lbl_tit = QLabel("<b>Atualização e Sincronização com o GitHub</b>")
+        lbl_tit.setStyleSheet("font-size: 15px;")
+        lbl_sub = QLabel("Gerenciamento de versões do Vespera Sci via repositório oficial Igorhls/vespera-sci.")
+        lbl_sub.setWordWrap(True)
+        lbl_sub.setStyleSheet("font-size: 11.5px;")
+        title_box.addWidget(lbl_tit)
         title_box.addWidget(lbl_sub)
-        header_layout.addLayout(title_box, stretch=1)
-        layout.addLayout(header_layout)
+        header.addLayout(title_box, stretch=1)
+        root.addLayout(header)
 
-        # Seletor de Canal de Atualização
-        channel_card = QFrame()
-        channel_card.setObjectName("cardPanel")
-        channel_card.setStyleSheet(
-            "QFrame#cardPanel { background: rgba(0,0,0,0.02); border: 1px solid rgba(0,0,0,0.1); "
-            "border-radius: 8px; padding: 6px; }"
-        )
-        ch_layout = QHBoxLayout(channel_card)
-        ch_layout.setContentsMargins(12, 8, 12, 8)
-        ch_layout.setSpacing(10)
+        # 2. Card de Seleção de Canal (Estável vs Dev)
+        card_canal = QFrame()
+        card_canal.setObjectName("cardPanel")
+        canal_layout = QHBoxLayout(card_canal)
+        canal_layout.setContentsMargins(12, 10, 12, 10)
+        canal_layout.setSpacing(10)
 
-        lbl_canal_tit = QLabel("<b>Canal de Atualização:</b>")
-        ch_layout.addWidget(lbl_canal_tit)
+        lbl_canal_rotulo = QLabel("<b>Canal de Atualização:</b>")
+        canal_layout.addWidget(lbl_canal_rotulo)
 
         self.cmb_canal = QComboBox()
-        self.cmb_canal.addItem("Oficial Estável (Recomendado — Releases Oficiais)", "stable")
+        self.cmb_canal.addItem("Oficial Estável (Releases Oficiais — Recomendado)", "stable")
         self.cmb_canal.addItem("Desenvolvimento (Commits da branch main — Dev)", "dev")
         if self._canal_atual == "dev":
             self.cmb_canal.setCurrentIndex(1)
         else:
             self.cmb_canal.setCurrentIndex(0)
         self.cmb_canal.currentIndexChanged.connect(self._on_canal_changed)
-        ch_layout.addWidget(self.cmb_canal, stretch=1)
+        canal_layout.addWidget(self.cmb_canal, stretch=1)
 
-        layout.addWidget(channel_card)
+        root.addWidget(card_canal)
 
-        # Status Principal
-        self.lbl_status_principal = QLabel("Consultando repositório oficial <b>Igorhls/vespera-sci</b> no GitHub...")
-        self.lbl_status_principal.setWordWrap(True)
-        self.lbl_status_principal.setStyleSheet("font-size: 13px; line-height: 1.4;")
-        layout.addWidget(self.lbl_status_principal)
+        # 3. Card de Status e Resumo
+        self.card_status = QFrame()
+        self.card_status.setObjectName("cardPanel")
+        status_layout = QHBoxLayout(self.card_status)
+        status_layout.setContentsMargins(14, 12, 14, 12)
+        status_layout.setSpacing(12)
 
-        # Card de Detalhes da Versão
-        self.frame_info = QFrame()
-        self.frame_info.setObjectName("cardPanel")
-        self.frame_info.setStyleSheet(
-            "QFrame#cardPanel { background: rgba(0,0,0,0.02); border: 1px solid rgba(0,0,0,0.1); "
-            "border-radius: 8px; padding: 10px; }"
-        )
-        info_layout = QVBoxLayout(self.frame_info)
-        info_layout.setContentsMargins(12, 10, 12, 10)
-        info_layout.setSpacing(6)
+        self.lbl_status_icon = QLabel()
+        self.lbl_status_icon.setPixmap(get_icon("info", color="#2563eb", size=24).pixmap(24, 24))
+        status_layout.addWidget(self.lbl_status_icon, alignment=Qt.AlignTop)
 
-        self.lbl_detalhes = QLabel("Verificando versão instalada e repositório remoto...")
-        self.lbl_detalhes.setWordWrap(True)
-        self.lbl_detalhes.setStyleSheet("font-size: 12px; line-height: 1.5;")
-        info_layout.addWidget(self.lbl_detalhes)
-        layout.addWidget(self.frame_info)
+        info_box = QVBoxLayout()
+        info_box.setSpacing(4)
+        self.lbl_status_titulo = QLabel("<b>Consultando repositório oficial no GitHub...</b>")
+        self.lbl_status_titulo.setStyleSheet("font-size: 13.5px;")
+        self.lbl_status_desc = QLabel("Verificando se há novas versões disponíveis para o canal selecionado.")
+        self.lbl_status_desc.setWordWrap(True)
+        self.lbl_status_desc.setStyleSheet("font-size: 12px;")
+        info_box.addWidget(self.lbl_status_titulo)
+        info_box.addWidget(self.lbl_status_desc)
+        status_layout.addLayout(info_box, stretch=1)
 
-        # Barra de Progresso
+        root.addWidget(self.card_status)
+
+        # 4. Painel de Metadados e Notas da Versão (Changelog)
+        card_detalhes = QFrame()
+        card_detalhes.setObjectName("cardPanel")
+        det_layout = QVBoxLayout(card_detalhes)
+        det_layout.setContentsMargins(12, 10, 12, 10)
+        det_layout.setSpacing(8)
+
+        self.lbl_metadados = QLabel("Versão instalada: Carregando...")
+        self.lbl_metadados.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.lbl_metadados.setStyleSheet("font-size: 12px;")
+        det_layout.addWidget(self.lbl_metadados)
+
+        lbl_notas_tit = QLabel("<b>Notas da Versão e Registro de Alterações:</b>")
+        lbl_notas_tit.setStyleSheet("font-size: 12px;")
+        det_layout.addWidget(lbl_notas_tit)
+
+        self.txt_notas = QTextBrowser()
+        self.txt_notas.setMinimumHeight(130)
+        self.txt_notas.setOpenExternalLinks(True)
+        det_layout.addWidget(self.txt_notas)
+
+        root.addWidget(card_detalhes, stretch=1)
+
+        # 5. Barra de Progresso de Download/Instalação
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
         self.progress_bar.setVisible(False)
-        self.progress_bar.setStyleSheet("QProgressBar { min-height: 14px; text-align: center; }")
-        layout.addWidget(self.progress_bar)
+        root.addWidget(self.progress_bar)
 
         self.lbl_progresso_msg = QLabel("")
-        self.lbl_progresso_msg.setStyleSheet("color: #64748b; font-size: 11.5px;")
+        self.lbl_progresso_msg.setStyleSheet("font-size: 11.5px;")
         self.lbl_progresso_msg.setVisible(False)
-        layout.addWidget(self.lbl_progresso_msg)
+        root.addWidget(self.lbl_progresso_msg)
 
-        # Rodapé de Ações
-        btn_layout = QHBoxLayout()
-        btn_layout.setSpacing(8)
+        # 6. Rodapé de Ações Unificado
+        footer_layout = QHBoxLayout()
+        footer_layout.setSpacing(8)
 
-        self.btn_abrir_browser = QPushButton("Ver Release no GitHub")
+        # Ações à Esquerda
+        self.btn_verificar = QPushButton("Verificar Novamente")
+        self.btn_verificar.setIcon(get_icon("refresh", size=14))
+        self.btn_verificar.setCursor(Qt.PointingHandCursor)
+        self.btn_verificar.clicked.connect(self._iniciar_verificacao)
+        footer_layout.addWidget(self.btn_verificar)
+
+        self.btn_abrir_browser = QPushButton("Ver no GitHub")
         self.btn_abrir_browser.setIcon(get_icon("external-link", size=14))
         self.btn_abrir_browser.setCursor(Qt.PointingHandCursor)
         self.btn_abrir_browser.setVisible(False)
         self.btn_abrir_browser.clicked.connect(self._abrir_no_navegador)
-        btn_layout.addWidget(self.btn_abrir_browser)
+        footer_layout.addWidget(self.btn_abrir_browser)
 
-        btn_layout.addStretch()
+        footer_layout.addStretch()
 
+        # Ações à Direita
         self.btn_atualizar = QPushButton("Baixar e Atualizar Agora")
-        self.btn_atualizar.setIcon(get_icon("download", color="#ffffff", size=15))
+        self.btn_atualizar.setIcon(get_icon("download", color="#ffffff", size=14))
         self.btn_atualizar.setObjectName("btnPrimary")
         self.btn_atualizar.setCursor(Qt.PointingHandCursor)
-        self.btn_atualizar.setMinimumHeight(34)
         self.btn_atualizar.setVisible(False)
         self.btn_atualizar.clicked.connect(self._iniciar_aplicacao_update)
+        footer_layout.addWidget(self.btn_atualizar)
 
         self.btn_reiniciar = QPushButton("Reiniciar Vespera Sci")
-        self.btn_reiniciar.setIcon(get_icon("refresh-cw", color="#ffffff", size=15))
+        self.btn_reiniciar.setIcon(get_icon("refresh", color="#ffffff", size=14))
         self.btn_reiniciar.setObjectName("btnSuccess")
         self.btn_reiniciar.setCursor(Qt.PointingHandCursor)
-        self.btn_reiniciar.setMinimumHeight(34)
         self.btn_reiniciar.setVisible(False)
         self.btn_reiniciar.clicked.connect(self._reiniciar_app)
+        footer_layout.addWidget(self.btn_reiniciar)
 
         self.btn_fechar = QPushButton("Fechar")
-        self.btn_fechar.setMinimumHeight(34)
         self.btn_fechar.setCursor(Qt.PointingHandCursor)
         self.btn_fechar.clicked.connect(self.reject)
+        footer_layout.addWidget(self.btn_fechar)
 
-        btn_layout.addWidget(self.btn_atualizar)
-        btn_layout.addWidget(self.btn_reiniciar)
-        btn_layout.addWidget(self.btn_fechar)
-        layout.addLayout(btn_layout)
+        root.addLayout(footer_layout)
 
     def _on_canal_changed(self, index: int):
         canal_selecionado = self.cmb_canal.itemData(index)
@@ -217,23 +246,33 @@ class UpdateDialog(QDialog):
     def _iniciar_verificacao(self):
         self.btn_atualizar.setVisible(False)
         self.btn_abrir_browser.setVisible(False)
+        self.btn_verificar.setEnabled(False)
         self.progress_bar.setVisible(True)
         self.progress_bar.setRange(0, 0)
+
         canal_nome = "Oficial Estável" if self._canal_atual == "stable" else "Desenvolvimento (Dev)"
-        self.lbl_status_principal.setText(f"Consultando <b>Canal {canal_nome}</b> no repositório GitHub...")
-        self.lbl_detalhes.setText("Aguarde a resposta da API do GitHub...")
+        self.lbl_status_icon.setPixmap(get_icon("info", color="#2563eb", size=24).pixmap(24, 24))
+        self.lbl_status_titulo.setText(f"<b>Consultando Canal {canal_nome}...</b>")
+        self.lbl_status_desc.setText("Aguarde a resposta do repositório oficial no GitHub.")
+        self.lbl_metadados.setText("Versão instalada: Consultando...")
+        self.txt_notas.setPlainText("Consultando notas de versão no GitHub...")
 
         self._check_worker = CheckUpdateWorker(canal=self._canal_atual)
         self._check_worker.finishedCheck.connect(self._ao_terminar_verificacao)
         self._check_worker.start()
 
     def _ao_terminar_verificacao(self, res: dict):
+        self.btn_verificar.setEnabled(True)
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setVisible(False)
 
         if not res.get("sucesso"):
-            self.lbl_status_principal.setText("<b>Não foi possível verificar atualizações no momento.</b>")
-            self.lbl_detalhes.setText(f"Erro: {res.get('erro', 'Falha de conexão.')}")
+            self.lbl_status_icon.setPixmap(get_icon("alert-circle", color="#dc2626", size=24).pixmap(24, 24))
+            self.lbl_status_titulo.setText("<b>Não foi possível verificar atualizações.</b>")
+            self.lbl_status_desc.setText(res.get("erro", "Erro de conexão com o GitHub."))
+            self.txt_notas.setPlainText(
+                "Certifique-se de que o computador está conectado à internet e tente novamente."
+            )
             return
 
         self._sha_remoto_full = res.get("sha_remoto_full", "")
@@ -251,57 +290,58 @@ class UpdateDialog(QDialog):
         if canal == "stable":
             titulo = res.get("titulo_release", f"v{v_remota}")
             data_pub = res.get("data_remota", "")
-            notas = res.get("notas_versao", "")
-            detalhes_html = (
-                f"<b>Canal:</b> Oficial Estável (Releases do GitHub)<br>"
-                f"<b>Versão Instalada:</b> v{v_local}<br>"
-                f"<b>Última Release Publicada:</b> {titulo} {f'({data_pub})' if data_pub else ''}<br><br>"
-                f"<b>Notas da Versão:</b><br><span style='color: #475569;'>{notas}</span>"
+            notas = res.get("notas_versao", "Nenhuma nota de versão cadastrada.")
+
+            self.lbl_metadados.setText(
+                f"<b>Versão Instalada:</b> v{v_local} &nbsp;|&nbsp; "
+                f"<b>Última Release Oficial:</b> {titulo} {f'({data_pub})' if data_pub else ''}"
             )
-            self.lbl_detalhes.setText(detalhes_html)
+            self.txt_notas.setMarkdown(notas)
 
             if tem_update:
-                self.lbl_status_principal.setText(
-                    f"<b>Uma nova versão estável (v{v_remota}) está disponível no GitHub!</b><br>"
-                    f"<span style='color: #64748b; font-size: 11.5px;'>"
-                    f"Seus projetos salvos continuarão intactos após a atualização.</span>"
+                self.lbl_status_icon.setPixmap(get_icon("download", color="#2563eb", size=24).pixmap(24, 24))
+                self.lbl_status_titulo.setText(f"<b>Uma nova versão oficial (v{v_remota}) está disponível!</b>")
+                self.lbl_status_desc.setText(
+                    "Clique em 'Baixar e Atualizar Agora' para atualizar sua instalação. "
+                    "Seus projetos salvos serão preservados."
                 )
                 self.btn_atualizar.setText("Baixar e Atualizar Agora")
                 self.btn_atualizar.setVisible(True)
             else:
-                self.lbl_status_principal.setText(
-                    f"<b>Seu Vespera Sci já está na versão estável mais recente (v{v_local}).</b><br>"
-                    f"<span style='color: #64748b; font-size: 11.5px;'>"
-                    f"Nenhuma nova release oficial foi publicada desde a sua instalação.</span>"
+                self.lbl_status_icon.setPixmap(get_icon("check-circle", color="#16a34a", size=24).pixmap(24, 24))
+                self.lbl_status_titulo.setText(f"<b>Seu Vespera Sci está na versão estável mais recente (v{v_local}).</b>")
+                self.lbl_status_desc.setText(
+                    "Nenhuma nova release foi publicada desde sua última atualização. "
+                    "O canal estável protege sua instalação de alterações intermediárias de desenvolvimento."
                 )
 
         else:
-            # Canal de Desenvolvimento (Dev)
             sha_l = res.get("sha_local", "N/D")
             sha_r = res.get("sha_remoto", "N/D")
             msg = res.get("mensagem_commit", "")
             data_com = res.get("data_remota", "")
 
-            detalhes_html = (
-                f"<b>Canal:</b> Desenvolvimento (Commits da branch <code>main</code>)<br>"
-                f"<b>Commit Local:</b> <code>{sha_l}</code><br>"
-                f"<b>Último Commit no GitHub:</b> <code>{sha_r}</code> {f'({data_com})' if data_com else ''}<br>"
-                f"<b>Mensagem:</b> <i>{msg}</i>"
+            self.lbl_metadados.setText(
+                f"<b>Commit Local:</b> <code>{sha_l}</code> &nbsp;|&nbsp; "
+                f"<b>Último Commit no GitHub (main):</b> <code>{sha_r}</code> {f'({data_com})' if data_com else ''}"
             )
-            self.lbl_detalhes.setText(detalhes_html)
+            self.txt_notas.setPlainText(
+                f"Mensagem do Commit:\n{msg}\n\n"
+                f"Repositório: https://github.com/Igorhls/vespera-sci/commits/main"
+            )
 
             if tem_update:
-                self.lbl_status_principal.setText(
-                    "<b>Novos commits de desenvolvimento estão disponíveis no repositório!</b><br>"
-                    "<span style='color: #64748b; font-size: 11.5px;'>"
-                    "Este canal permite testar alterações recentes antes da publicação da release oficial.</span>"
+                self.lbl_status_icon.setPixmap(get_icon("download", color="#2563eb", size=24).pixmap(24, 24))
+                self.lbl_status_titulo.setText("<b>Novos commits de desenvolvimento disponíveis na branch main.</b>")
+                self.lbl_status_desc.setText(
+                    "Você está no Canal de Desenvolvimento (Dev). Clique abaixo para sincronizar com as alterações mais recentes."
                 )
                 self.btn_atualizar.setText("Sincronizar com a Branch Main")
                 self.btn_atualizar.setVisible(True)
             else:
-                self.lbl_status_principal.setText(
-                    "<b>Sua instalação está sincronizada com o último commit da branch main.</b>"
-                )
+                self.lbl_status_icon.setPixmap(get_icon("check-circle", color="#16a34a", size=24).pixmap(24, 24))
+                self.lbl_status_titulo.setText("<b>Sua instalação já está sincronizada com o último commit da branch main.</b>")
+                self.lbl_status_desc.setText("Não há novos commits pendentes no repositório.")
 
     def _abrir_no_navegador(self):
         if self._html_url:
@@ -310,6 +350,7 @@ class UpdateDialog(QDialog):
     def _iniciar_aplicacao_update(self):
         self.btn_atualizar.setEnabled(False)
         self.btn_fechar.setEnabled(False)
+        self.btn_verificar.setEnabled(False)
         self.cmb_canal.setEnabled(False)
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
@@ -330,13 +371,13 @@ class UpdateDialog(QDialog):
 
     def _ao_terminar_update(self, res: dict):
         self.btn_fechar.setEnabled(True)
+        self.btn_verificar.setEnabled(True)
         self.cmb_canal.setEnabled(True)
         if res.get("sucesso"):
             self.progress_bar.setValue(100)
-            self.lbl_status_principal.setText(
-                "<b>Atualização instalada com sucesso!</b><br>"
-                "Reinicie o Vespera Sci para carregar as alterações."
-            )
+            self.lbl_status_icon.setPixmap(get_icon("check-circle", color="#16a34a", size=24).pixmap(24, 24))
+            self.lbl_status_titulo.setText("<b>Atualização concluída com sucesso!</b>")
+            self.lbl_status_desc.setText("Clique em 'Reiniciar Vespera Sci' para carregar a nova versão.")
             self.btn_atualizar.setVisible(False)
             self.btn_reiniciar.setVisible(True)
         else:

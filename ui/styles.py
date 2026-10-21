@@ -73,8 +73,9 @@ def build_qss(theme: dict) -> str:
         color: {theme['text_primary']};
     }}
 
-    QMainWindow, QWidget#centralWidget {{
+    QMainWindow, QDialog, QWidget#centralWidget {{
         background-color: {theme['bg_window']};
+        color: {theme['text_primary']};
     }}
 
     QMenuBar {{
@@ -117,6 +118,9 @@ def build_qss(theme: dict) -> str:
         background-color: {theme['bg_card']};
         border: 1px solid {theme['border']};
         border-radius: 8px;
+    }}
+    QFrame#cardPanel:hover {{
+        border-color: {theme['border_focus']};
     }}
 
     QScrollArea {{
@@ -244,7 +248,7 @@ def build_qss(theme: dict) -> str:
     }}
 
     /* Inputs e Controles */
-    QLineEdit, QComboBox, QDoubleSpinBox, QSpinBox, QPlainTextEdit {{
+    QLineEdit, QComboBox, QDoubleSpinBox, QSpinBox, QPlainTextEdit, QTextBrowser, QTextEdit {{
         background-color: {theme['bg_input']};
         color: {theme['text_primary']};
         border: 1px solid {theme['border']};
@@ -253,7 +257,7 @@ def build_qss(theme: dict) -> str:
         selection-background-color: {theme['accent']};
         selection-color: {theme['accent_text']};
     }}
-    QLineEdit:focus, QComboBox:focus, QDoubleSpinBox:focus, QPlainTextEdit:focus {{
+    QLineEdit:focus, QComboBox:focus, QDoubleSpinBox:focus, QPlainTextEdit:focus, QTextBrowser:focus, QTextEdit:focus {{
         border: 1px solid {theme['border_focus']};
         background-color: {theme['bg_card']};
     }}
@@ -360,6 +364,23 @@ def build_qss(theme: dict) -> str:
     }}
     QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
         width: 0px;
+    }}
+
+    /* Barra de Progresso */
+    QProgressBar {{
+        background-color: {theme['bg_card_alt']};
+        border: 1px solid {theme['border']};
+        border-radius: 6px;
+        text-align: center;
+        font-size: 11px;
+        font-weight: 600;
+        color: {theme['text_primary']};
+        min-height: 14px;
+        max-height: 16px;
+    }}
+    QProgressBar::chunk {{
+        background-color: {theme['accent']};
+        border-radius: 5px;
     }}
 
     /* Splitter */

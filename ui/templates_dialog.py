@@ -125,10 +125,6 @@ class TemplatesGalleryDialog(QDialog):
         for nome, dados in presets_dict.items():
             card = QFrame()
             card.setObjectName("cardPanel")
-            card.setStyleSheet(
-                "QFrame#cardPanel { background: rgba(0,0,0,0.02); border: 1px solid rgba(0,0,0,0.1); "
-                "border-radius: 8px; padding: 6px; } QFrame#cardPanel:hover { border-color: #3b82f6; }"
-            )
             c_layout = QHBoxLayout(card)
             c_layout.setContentsMargins(12, 10, 12, 10)
             c_layout.setSpacing(12)
