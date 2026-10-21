@@ -19,8 +19,10 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QHeaderView,
+    QInputDialog,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPlainTextEdit,
     QPushButton,
     QTableWidget,
@@ -299,8 +301,21 @@ class DataTableWidget(QWidget):
 
         self.btn_del_row = QPushButton("Remover")
         self.btn_del_row.setIcon(get_icon("minus", size=15))
+        self.btn_del_row.setToolTip("Remover linha selecionada")
         self.btn_del_row.setCursor(Qt.PointingHandCursor)
         self.btn_del_row.clicked.connect(self._remover_linha)
+
+        self.btn_add_col = QPushButton("+ Série")
+        self.btn_add_col.setIcon(get_icon("plus", size=14))
+        self.btn_add_col.setToolTip("Adicionar nova coluna / série de dados no modo Linhas")
+        self.btn_add_col.setCursor(Qt.PointingHandCursor)
+        self.btn_add_col.clicked.connect(self._adicionar_coluna)
+
+        self.btn_del_col = QPushButton("- Série")
+        self.btn_del_col.setIcon(get_icon("minus", size=14))
+        self.btn_del_col.setToolTip("Remover coluna / série selecionada")
+        self.btn_del_col.setCursor(Qt.PointingHandCursor)
+        self.btn_del_col.clicked.connect(self._remover_coluna)
 
         self.btn_undo = QPushButton("Desfazer")
         self.btn_undo.setIcon(get_icon("undo", size=15))
@@ -335,6 +350,8 @@ class DataTableWidget(QWidget):
 
         hl_table_btns.addWidget(self.btn_add_row)
         hl_table_btns.addWidget(self.btn_del_row)
+        hl_table_btns.addWidget(self.btn_add_col)
+        hl_table_btns.addWidget(self.btn_del_col)
         hl_table_btns.addWidget(self.btn_undo)
         hl_table_btns.addWidget(self.btn_redo)
         hl_table_btns.addWidget(self.btn_renum)
@@ -353,6 +370,7 @@ class DataTableWidget(QWidget):
         self.table.pasteRequested.connect(self._colar_direto_tabela)
         self.table.undoRequested.connect(self._desfazer)
         self.table.redoRequested.connect(self._refazer)
+        self.table.horizontalHeader().sectionDoubleClicked.connect(self._on_header_double_clicked)
         layout_dados.addWidget(self.table, stretch=1)
 
         self.tabs.addTab(tab_dados, get_icon("table", size=16), "Matriz de Dados")
@@ -714,8 +732,19 @@ class DataTableWidget(QWidget):
 
         if self.tipo_grafico == "linhas":
             df = self.df_linhas
-            colunas_internas = ["Pontos", "Manha", "Tarde", "Noite"]
-            cabecalhos = ["Pontos", "Manhã (°C)", "Tarde (°C)", "Noite (°C)"]
+            colunas_internas = list(df.columns)
+            if colunas_internas == ["Pontos", "Manha", "Tarde", "Noite"]:
+                cabecalhos = ["Pontos", "Manhã (°C)", "Tarde (°C)", "Noite (°C)"]
+            else:
+                cabecalhos = []
+                for idx_c, col in enumerate(colunas_internas):
+                    if idx_c == 0:
+                        cabecalhos.append(col)
+                    elif col in ["Manha", "Tarde", "Noite"]:
+                        lbl_m = {"Manha": "Manhã (°C)", "Tarde": "Tarde (°C)", "Noite": "Noite (°C)"}
+                        cabecalhos.append(lbl_m[col])
+                    else:
+                        cabecalhos.append(col)
             fmt_dec = "{:.1f}"
         elif self.tipo_grafico == "barras":
             df = self.df_barras
@@ -777,7 +806,7 @@ class DataTableWidget(QWidget):
     def _ler_dataframe_da_tabela(self) -> pd.DataFrame:
         rows = self.table.rowCount()
         if self.tipo_grafico == "linhas":
-            colunas = ["Pontos", "Manha", "Tarde", "Noite"]
+            colunas = list(self.df_linhas.columns)
         elif self.tipo_grafico == "barras":
             colunas = ["Mes", "Bosque", "Desvio_Bosque", "Estacionamento", "Desvio_Estacionamento"]
         elif self.tipo_grafico == "dispersao":
@@ -894,13 +923,119 @@ class DataTableWidget(QWidget):
         self.atualizar_sumario_estatistico()
         self.dataOrMetaChanged.emit()
 
+
+    # -----------------------------------------------------------------------
+    # Séries Dinâmicas e Início em Branco
+    # -----------------------------------------------------------------------
+    def _on_header_double_clicked(self, logical_index: int):
+        if logical_index == 0:
+            return
+        if self.tipo_grafico == "linhas":
+            cols = list(self.df_linhas.columns)
+            if logical_index >= len(cols):
+                return
+            col_antiga = cols[logical_index]
+            novo_nome, ok = QInputDialog.getText(
+                self,
+                "Renomear Série / Coluna",
+                f"Digite o novo nome para a série '{col_antiga}':",
+                text=str(col_antiga),
+            )
+            if ok and novo_nome.strip():
+                nome_limpo = novo_nome.strip()
+                if nome_limpo != col_antiga:
+                    if nome_limpo in self.df_linhas.columns:
+                        QMessageBox.warning(self, "Nome Duplicado", f"Já existe uma coluna com o nome '{nome_limpo}'.")
+                        return
+                    self._push_undo_state()
+                    self.df_linhas.rename(columns={col_antiga: nome_limpo}, inplace=True)
+                    self._popular_tabela()
+                    self.atualizar_sumario_estatistico()
+                    self.dataOrMetaChanged.emit()
+
+    def _adicionar_coluna(self):
+        if self.tipo_grafico != "linhas":
+            QMessageBox.information(
+                self,
+                "Adicionar Série",
+                "A criação de séries dinâmicas personalizadas está habilitada no modo Séries Temporais (Linhas).",
+            )
+            return
+        self._push_undo_state()
+        idx = 1
+        while f"Série {idx}" in self.df_linhas.columns:
+            idx += 1
+        nova_col = f"Série {idx}"
+        self.df_linhas[nova_col] = np.nan
+        self._popular_tabela()
+        self.atualizar_sumario_estatistico()
+        self.dataOrMetaChanged.emit()
+
+    def _remover_coluna(self):
+        if self.tipo_grafico != "linhas":
+            return
+        cols = list(self.df_linhas.columns)
+        if len(cols) <= 2:
+            QMessageBox.information(
+                self,
+                "Remover Série",
+                "A matriz de dados deve conter ao menos uma série de medição além da coluna de identificação.",
+            )
+            return
+        col_atual = self.table.currentColumn()
+        if col_atual <= 0 or col_atual >= len(cols):
+            col_atual = len(cols) - 1
+        col_remover = cols[col_atual]
+        resp = QMessageBox.question(
+            self,
+            "Confirmar Remoção de Série",
+            f"Deseja realmente remover a coluna '{col_remover}' e seus dados?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if resp == QMessageBox.Yes:
+            self._push_undo_state()
+            self.df_linhas.drop(columns=[col_remover], inplace=True)
+            self._popular_tabela()
+            self.atualizar_sumario_estatistico()
+            self.dataOrMetaChanged.emit()
+
+    def iniciar_em_branco(self):
+        """Inicializa um projeto limpo com 10 pontos e séries vazias prontas para preenchimento."""
+        self._updating_ui = True
+        self._undo_stack.clear()
+        self._redo_stack.clear()
+        self._update_undo_redo_buttons()
+        self.tipo_grafico = "linhas"
+        self.df_linhas = pd.DataFrame({
+            "Pontos": [f"P{i+1}" for i in range(10)],
+            "Série 1": [np.nan] * 10,
+            "Série 2": [np.nan] * 10,
+        })
+        self.txt_titulo_dia.setText("Novo Experimento")
+        self.txt_titulo_grafico.setText("")
+        self.txt_rotulo_x.setText("Pontos")
+        self.txt_rotulo_y.setText("Medição (unidade)")
+        self.spn_min_y.setValue(0.0)
+        self.spn_max_y.setValue(100.0)
+        self.spn_intervalo_ticks_y.setValue(0.0)
+        self._updating_ui = False
+        self.configurar_modo("linhas")
+        self._popular_tabela()
+        self.atualizar_sumario_estatistico()
+        self.dataOrMetaChanged.emit()
+
     def _adicionar_linha(self):
         self._push_undo_state()
         df = self._ler_dataframe_da_tabela()
         if self.tipo_grafico == "linhas":
-            novo = pd.DataFrame(
-                [{"Pontos": f"P{len(df)+1}", "Manha": 25.0, "Tarde": 29.0, "Noite": 26.0}]
-            )
+            col_id = df.columns[0]
+            nova_dict = {col_id: f"P{len(df)+1}"}
+            for c in df.columns[1:]:
+                if c in ["Manha", "Tarde", "Noite"]:
+                    nova_dict[c] = 25.0 if c == "Manha" else (29.0 if c == "Tarde" else 26.0)
+                else:
+                    nova_dict[c] = np.nan
+            novo = pd.DataFrame([nova_dict])
             self.df_linhas = pd.concat([df, novo], ignore_index=True)
         elif self.tipo_grafico == "barras":
             novo = pd.DataFrame([
@@ -1161,16 +1296,18 @@ class DataTableWidget(QWidget):
     def atualizar_sumario_estatistico(self):
         if self.tipo_grafico == "linhas":
             blocos = []
-            for per, label in [("Manha", "Manhã"), ("Tarde", "Tarde"), ("Noite", "Noite")]:
-                if per in self.df_linhas.columns:
-                    est = calcular_estatisticas_serie(self.df_linhas[per])
-                    if est:
-                        blocos.append(
-                            f"<b>{label}:</b> Média = <b>{est['media']:.2f} °C</b> &nbsp;|&nbsp; "
-                            f"Desvio (s) = <b>{est['desvio']:.2f} °C</b> &nbsp;|&nbsp; "
-                            f"Mín = <b>{est['minimo']:.1f} °C</b> &nbsp;|&nbsp; Máx = <b>{est['maximo']:.1f} °C</b> &nbsp;|&nbsp; "
-                            f"Amplitude = <b>{est['amplitude']:.1f} °C</b> (N={est['n']})"
-                        )
+            cols_series = [c for c in self.df_linhas.columns if c != self.df_linhas.columns[0]]
+            label_map = {"Manha": "Manhã", "Tarde": "Tarde", "Noite": "Noite"}
+            for col_s in cols_series:
+                label = label_map.get(col_s, col_s)
+                est = calcular_estatisticas_serie(self.df_linhas[col_s])
+                if est:
+                    blocos.append(
+                        f"<b>{label}:</b> Média = <b>{est['media']:.2f}</b> &nbsp;|&nbsp; "
+                        f"Desvio (s) = <b>{est['desvio']:.2f}</b> &nbsp;|&nbsp; "
+                        f"Mín = <b>{est['minimo']:.1f}</b> &nbsp;|&nbsp; Máx = <b>{est['maximo']:.1f}</b> &nbsp;|&nbsp; "
+                        f"Amplitude = <b>{est['amplitude']:.1f}</b> (N={est['n']})"
+                    )
             self.lbl_stats.setText("<br><br>".join(blocos) if blocos else "Sem dados numéricos na tabela.")
         elif self.tipo_grafico == "barras":
             linhas_txt = []

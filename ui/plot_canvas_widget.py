@@ -49,6 +49,8 @@ class PlotCanvasWidget(QWidget):
         self.frame_series = QFrame()
         self.frame_series.setObjectName("cardPanel")
         series_layout = QHBoxLayout(self.frame_series)
+        self.series_layout = series_layout
+        self.dynamic_chk_series = {}
         series_layout.setContentsMargins(12, 8, 12, 8)
         series_layout.setSpacing(10)
 
@@ -180,6 +182,35 @@ class PlotCanvasWidget(QWidget):
         limpo = (nome or "grafico").strip().replace(" ", "_").lower()
         self._nome_base_padrao = limpo or "grafico"
 
+    def atualizar_series_dinamicas(self, colunas_series: list):
+        """Atualiza dinamicamente os checkboxes de séries no topo para qualquer quantidade de colunas."""
+        self._updating_ui = True
+        is_padrao = (set(colunas_series) == {"Manha", "Tarde", "Noite"})
+        is_linhas = (self.tipo_grafico == "linhas")
+
+        for chk in (self.chk_manha, self.chk_tarde, self.chk_noite):
+            chk.setVisible(is_padrao and is_linhas)
+
+        for col, chk in list(self.dynamic_chk_series.items()):
+            if is_padrao or not is_linhas or col not in colunas_series:
+                chk.setVisible(False)
+
+        if not is_padrao and is_linhas:
+            for idx, col in enumerate(colunas_series):
+                if col not in self.dynamic_chk_series:
+                    chk = QCheckBox(col)
+                    chk.setChecked(True)
+                    chk.setCursor(Qt.PointingHandCursor)
+                    chk.toggled.connect(self._on_series_toggled)
+                    self.series_layout.insertWidget(1 + idx, chk)
+                    self.dynamic_chk_series[col] = chk
+                else:
+                    chk = self.dynamic_chk_series[col]
+                    chk.setText(col)
+                    chk.setVisible(True)
+
+        self._updating_ui = False
+
     def configurar_modo(self, tipo_grafico: str, rotulos_barras: dict = None):
         """Alterna os checkboxes visíveis conforme o modo ('linhas', 'barras' ou 'dispersao')."""
         self._updating_ui = True
@@ -200,6 +231,10 @@ class PlotCanvasWidget(QWidget):
 
         for chk in (self.chk_pontos_disp, self.chk_reta_disp, self.chk_r2_disp):
             chk.setVisible(is_dispersao)
+
+        if not is_linhas and hasattr(self, "dynamic_chk_series"):
+            for chk in self.dynamic_chk_series.values():
+                chk.setVisible(False)
 
         if rotulos_barras and is_barras:
             self.chk_bosque.setText(rotulos_barras.get("Bosque", "Bosque"))
@@ -238,14 +273,22 @@ class PlotCanvasWidget(QWidget):
         }
 
     def obter_series_linhas_ativas(self) -> list:
-        ativas = []
-        if self.chk_manha.isChecked():
-            ativas.append("Manha")
-        if self.chk_tarde.isChecked():
-            ativas.append("Tarde")
-        if self.chk_noite.isChecked():
-            ativas.append("Noite")
-        return ativas
+        if self.tipo_grafico != "linhas":
+            return []
+        if self.chk_manha.isVisible():
+            ativas = []
+            if self.chk_manha.isChecked():
+                ativas.append("Manha")
+            if self.chk_tarde.isChecked():
+                ativas.append("Tarde")
+            if self.chk_noite.isChecked():
+                ativas.append("Noite")
+            return ativas
+
+        if hasattr(self, "dynamic_chk_series"):
+            ativas = [col for col, chk in self.dynamic_chk_series.items() if chk.isVisible() and chk.isChecked()]
+            return ativas
+        return []
 
     def obter_series_barras_ativas(self) -> list:
         ativas = []

@@ -95,41 +95,53 @@ def renderizar_grafico_linhas(
     fig.patch.set_facecolor("white")
     ax.set_facecolor("white")
 
-    pontos = df["Pontos"].astype(str).tolist()
+    col_id = "Pontos" if "Pontos" in df.columns else df.columns[0]
+    pontos = df[col_id].astype(str).tolist() if len(df) > 0 else []
     x_indices = np.arange(len(pontos))
+
+    colunas_candidatas = [c for c in df.columns if c != col_id]
+    ordem_historica = ["Manha", "Tarde", "Noite"]
+    colunas_plot = [c for c in ordem_historica if c in colunas_candidatas] + [c for c in colunas_candidatas if c not in ordem_historica]
+
+    PALETA_CORES_PADRAO = ["#222222", "#e74c3c", "#2980b9", "#27ae60", "#8e44ad", "#d35400", "#16a085", "#f39c12", "#34495e"]
+    LISTA_MARCADORES_PADRAO = ["o", "s", "^", "D", "v", "<", ">", "p", "*"]
 
     if marcadores_map is None:
         marcadores_map = {"Manha": "o", "Tarde": "s", "Noite": "^"}
 
-    for periodo in ["Manha", "Tarde", "Noite"]:
-        if periodo in df.columns and periodo in series_ativas:
-            m = marcadores_map.get(periodo) if com_marcadores else None
-            if m == "None" or not m:
-                m = None
-            ls = estilos_linhas.get(periodo, "-")
-            cor = cores_periodos.get(periodo, "#000000")
-            lbl = rotulos_legenda.get(periodo, periodo) if rotulos_legenda else periodo
+    for idx_col, col_name in enumerate(colunas_plot):
+        if series_ativas is not None and len(series_ativas) > 0 and col_name not in series_ativas:
+            continue
 
-            ax.plot(
-                x_indices,
-                pd.to_numeric(df[periodo], errors="coerce"),
-                label=lbl,
-                color=cor,
-                linestyle=ls,
-                linewidth=espessura_linha,
-                marker=m,
-                markersize=tamanho_marcador,
-                markeredgecolor=cor,
-                markerfacecolor="white" if com_marcadores and "Monocromático" in str(cores_periodos) else cor,
-            )
+        m = marcadores_map.get(col_name, LISTA_MARCADORES_PADRAO[idx_col % len(LISTA_MARCADORES_PADRAO)]) if com_marcadores else None
+        if m == "None" or not m:
+            m = None
+        ls = estilos_linhas.get(col_name, "-")
+        cor = cores_periodos.get(col_name, PALETA_CORES_PADRAO[idx_col % len(PALETA_CORES_PADRAO)])
+        lbl = rotulos_legenda.get(col_name, col_name) if rotulos_legenda else col_name
 
-    ax.set_xticks(x_indices)
-    ax.set_xticklabels(pontos, fontsize=tamanho_fonte - 0.5)
+        s_val = pd.to_numeric(df[col_name], errors="coerce")
+        ax.plot(
+            x_indices,
+            s_val,
+            label=lbl,
+            color=cor,
+            linestyle=ls,
+            linewidth=espessura_linha,
+            marker=m,
+            markersize=tamanho_marcador,
+            markeredgecolor=cor,
+            markerfacecolor="white" if com_marcadores and "Monocromático" in str(cores_periodos) else cor,
+        )
+
+    if len(x_indices) > 0:
+        ax.set_xticks(x_indices)
+        ax.set_xticklabels(pontos, fontsize=tamanho_fonte - 0.5)
 
     todas_temps = []
-    for col in ["Manha", "Tarde", "Noite"]:
-        if col in df.columns and col in series_ativas:
-            todas_temps.extend(pd.to_numeric(df[col], errors="coerce").dropna().tolist())
+    for col_name in colunas_plot:
+        if series_ativas is None or len(series_ativas) == 0 or col_name in series_ativas:
+            todas_temps.extend(pd.to_numeric(df[col_name], errors="coerce").dropna().tolist())
 
     if todas_temps:
         real_min = min(todas_temps)

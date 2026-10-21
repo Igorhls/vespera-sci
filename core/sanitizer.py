@@ -9,36 +9,40 @@ import pandas as pd
 
 def sanitizar_dados_tabela(df: pd.DataFrame):
     """
-    Corrige automaticamente problemas comuns ao colar dados de temperatura do Excel em PT-BR:
+    Corrige automaticamente problemas comuns ao colar dados de temperatura/medições do Excel em PT-BR:
     1. Vírgula que virou centena/milhar (ex: 27,4 -> 274.0 vira 27.4).
-    2. Valores vazios na coluna 'Pontos' preenchidos como P1..Pn.
+    2. Valores vazios na coluna identificadora preenchidos como P1..Pn.
+    Compatível com qualquer número de colunas/séries dinâmicas.
     """
     modificado = False
     df_novo = df.copy()
+    if df_novo.empty:
+        return df_novo, False
 
+    col_pontos = "Pontos" if "Pontos" in df_novo.columns else df_novo.columns[0]
     for idx in range(len(df_novo)):
-        val_ponto = df_novo.iloc[idx]["Pontos"]
+        val_ponto = df_novo.iloc[idx][col_pontos]
         if pd.isna(val_ponto) or str(val_ponto).strip().lower() in ["none", "nan", ""]:
-            df_novo.iloc[idx, df_novo.columns.get_loc("Pontos")] = f"P{idx + 1}"
+            df_novo.iloc[idx, df_novo.columns.get_loc(col_pontos)] = f"P{idx + 1}"
             modificado = True
 
-    for col in ["Manha", "Tarde", "Noite"]:
-        if col in df_novo.columns:
-            for idx in range(len(df_novo)):
-                val = df_novo.iloc[idx][col]
-                if pd.notnull(val):
-                    try:
-                        v_float = float(str(val).replace(",", "."))
-                        if 60.0 < v_float <= 600.0:
-                            df_novo.iloc[idx, df_novo.columns.get_loc(col)] = round(v_float / 10.0, 1)
-                            modificado = True
-                        elif 600.0 < v_float <= 6000.0:
-                            df_novo.iloc[idx, df_novo.columns.get_loc(col)] = round(v_float / 100.0, 1)
-                            modificado = True
-                        else:
-                            df_novo.iloc[idx, df_novo.columns.get_loc(col)] = v_float
-                    except (ValueError, TypeError):
-                        pass
+    cols_num = [c for c in df_novo.columns if c != col_pontos]
+    for col in cols_num:
+        for idx in range(len(df_novo)):
+            val = df_novo.iloc[idx][col]
+            if pd.notnull(val) and val != "":
+                try:
+                    v_float = float(str(val).replace(",", "."))
+                    if 60.0 < v_float <= 600.0:
+                        df_novo.iloc[idx, df_novo.columns.get_loc(col)] = round(v_float / 10.0, 1)
+                        modificado = True
+                    elif 600.0 < v_float <= 6000.0:
+                        df_novo.iloc[idx, df_novo.columns.get_loc(col)] = round(v_float / 100.0, 1)
+                        modificado = True
+                    else:
+                        df_novo.iloc[idx, df_novo.columns.get_loc(col)] = v_float
+                except (ValueError, TypeError):
+                    pass
 
     return df_novo, modificado
 

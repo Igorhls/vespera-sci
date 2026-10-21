@@ -68,6 +68,7 @@ class VesperaMainWindow(QMainWindow):
 
         self.tipo_grafico_atual = "linhas"
         self.nome_projeto_atual = "Dia 14 de agosto"
+        self.caminho_arquivo_atual = None
         self.cfg_atual = DEFAULT_CONFIG.copy()
         self._updating_project_combo = False
         self.settings = QSettings("VesperaSci", "VesperaSci")
@@ -140,21 +141,49 @@ class VesperaMainWindow(QMainWindow):
 
         menu_arq = menubar.addMenu("&Arquivo")
 
-        act_salvar = QAction("Salvar Projeto Atual", self)
+        act_novo = QAction("Novo Projeto", self)
+        act_novo.setIcon(get_icon("plus", size=16))
+        act_novo.setShortcut(QKeySequence.New)
+        act_novo.triggered.connect(self._novo_projeto_em_branco)
+        menu_arq.addAction(act_novo)
+
+        act_abrir = QAction("Abrir Projeto (.vespera / .json)...", self)
+        act_abrir.setIcon(get_icon("folder", size=16))
+        act_abrir.setShortcut(QKeySequence.Open)
+        act_abrir.triggered.connect(self._abrir_arquivo_projeto)
+        menu_arq.addAction(act_abrir)
+
+        self.menu_recentes = menu_arq.addMenu("Projetos Recentes")
+        self._atualizar_menu_recentes()
+
+        act_salvar = QAction("Salvar Projeto", self)
         act_salvar.setIcon(get_icon("save", size=16))
         act_salvar.setShortcut(QKeySequence.Save)
-        act_salvar.triggered.connect(self._salvar_projeto_atual)
+        act_salvar.triggered.connect(self._salvar_projeto)
         menu_arq.addAction(act_salvar)
 
-        act_imp_json = QAction("Importar Projeto (.json / .vespera)...", self)
-        act_imp_json.setIcon(get_icon("folder", size=16))
-        act_imp_json.triggered.connect(self._importar_arquivo_projeto)
-        menu_arq.addAction(act_imp_json)
+        act_salvar_como = QAction("Salvar Projeto Como...", self)
+        act_salvar_como.setIcon(get_icon("save", size=16))
+        act_salvar_como.setShortcut(QKeySequence("Ctrl+Shift+S"))
+        act_salvar_como.triggered.connect(self._salvar_projeto_como)
+        menu_arq.addAction(act_salvar_como)
+
+        menu_arq.addSeparator()
+
+        act_galeria = QAction("Galeria de Modelos Prontos...", self)
+        act_galeria.setIcon(get_icon("wand", size=16))
+        act_galeria.triggered.connect(self._abrir_galeria_modelos)
+        menu_arq.addAction(act_galeria)
 
         act_imp_xlsx = QAction("Importar Planilha (.xlsx / .csv)...", self)
         act_imp_xlsx.setIcon(get_icon("file-spreadsheet", size=16))
         act_imp_xlsx.triggered.connect(self._importar_planilha)
         menu_arq.addAction(act_imp_xlsx)
+
+        act_exp_xlsx = QAction("Exportar Planilha Excel com Gráfico...", self)
+        act_exp_xlsx.setIcon(get_icon("file-spreadsheet", size=16))
+        act_exp_xlsx.triggered.connect(lambda: self.plot_widget._solicitar_exportacao_excel() if hasattr(self, "plot_widget") else None)
+        menu_arq.addAction(act_exp_xlsx)
 
         act_exp_svg = QAction("Exportar Gráfico em SVG Vetorial...", self)
         act_exp_svg.setIcon(get_icon("download", size=16))
@@ -331,6 +360,27 @@ class VesperaMainWindow(QMainWindow):
         proj_layout.setContentsMargins(10, 6, 10, 6)
         proj_layout.setSpacing(8)
 
+        self.btn_novo = QPushButton("Novo")
+        self.btn_novo.setIcon(get_icon("plus", size=15))
+        self.btn_novo.setToolTip("Criar Novo Projeto em Branco (Ctrl+N)")
+        self.btn_novo.setCursor(Qt.PointingHandCursor)
+        self.btn_novo.clicked.connect(self._novo_projeto_em_branco)
+        proj_layout.addWidget(self.btn_novo)
+
+        self.btn_abrir = QPushButton("Abrir")
+        self.btn_abrir.setIcon(get_icon("folder", size=15))
+        self.btn_abrir.setToolTip("Abrir Arquivo de Projeto .vespera ou .json (Ctrl+O)")
+        self.btn_abrir.setCursor(Qt.PointingHandCursor)
+        self.btn_abrir.clicked.connect(self._abrir_arquivo_projeto)
+        proj_layout.addWidget(self.btn_abrir)
+
+        self.btn_modelos = QPushButton("Modelos Prontos")
+        self.btn_modelos.setIcon(get_icon("wand", size=15))
+        self.btn_modelos.setToolTip("Abrir Galeria de Modelos e Presets Experimentais")
+        self.btn_modelos.setCursor(Qt.PointingHandCursor)
+        self.btn_modelos.clicked.connect(self._abrir_galeria_modelos)
+        proj_layout.addWidget(self.btn_modelos)
+
         proj_layout.addWidget(QLabel("<b>Projeto:</b>"))
         self.txt_nome_projeto = QLineEdit()
         self.txt_nome_projeto.setPlaceholderText("Nome do projeto...")
@@ -338,11 +388,19 @@ class VesperaMainWindow(QMainWindow):
         proj_layout.addWidget(self.txt_nome_projeto)
 
         self.btn_salvar_proj = QPushButton("Salvar (Ctrl+S)")
-        self.btn_salvar_proj.setIcon(get_icon("save", color="#ffffff", size=16))
+        self.btn_salvar_proj.setIcon(get_icon("save", color="#ffffff", size=15))
         self.btn_salvar_proj.setObjectName("btnPrimary")
+        self.btn_salvar_proj.setToolTip("Salvar Projeto Atual (Ctrl+S)")
         self.btn_salvar_proj.setCursor(Qt.PointingHandCursor)
-        self.btn_salvar_proj.clicked.connect(self._salvar_projeto_atual)
+        self.btn_salvar_proj.clicked.connect(self._salvar_projeto)
         proj_layout.addWidget(self.btn_salvar_proj)
+
+        self.btn_salvar_como = QPushButton("Salvar Como...")
+        self.btn_salvar_como.setIcon(get_icon("save", size=15))
+        self.btn_salvar_como.setToolTip("Salvar Cópia do Projeto em Arquivo .vespera (Ctrl+Shift+S)")
+        self.btn_salvar_como.setCursor(Qt.PointingHandCursor)
+        self.btn_salvar_como.clicked.connect(self._salvar_projeto_como)
+        proj_layout.addWidget(self.btn_salvar_como)
 
         proj_layout.addWidget(QLabel("<b>Salvos:</b>"))
         self.cmb_projetos_salvos = QComboBox()
@@ -350,14 +408,8 @@ class VesperaMainWindow(QMainWindow):
         self.cmb_projetos_salvos.currentIndexChanged.connect(self._on_projeto_salvo_selecionado)
         proj_layout.addWidget(self.cmb_projetos_salvos, stretch=1)
 
-        self.btn_exportar_json = QPushButton("Backup (.json)")
-        self.btn_exportar_json.setIcon(get_icon("download", size=16))
-        self.btn_exportar_json.setCursor(Qt.PointingHandCursor)
-        self.btn_exportar_json.clicked.connect(self._exportar_projeto_json)
-        proj_layout.addWidget(self.btn_exportar_json)
-
         self.btn_excluir_proj = QPushButton("Excluir")
-        self.btn_excluir_proj.setIcon(get_icon("trash", color="#dc2626", size=16))
+        self.btn_excluir_proj.setIcon(get_icon("trash", color="#dc2626", size=15))
         self.btn_excluir_proj.setObjectName("btnDanger")
         self.btn_excluir_proj.setCursor(Qt.PointingHandCursor)
         self.btn_excluir_proj.clicked.connect(self._excluir_projeto_atual)
@@ -433,9 +485,13 @@ class VesperaMainWindow(QMainWindow):
         if ultimo and ultimo in projetos_dict:
             self._aplicar_projeto_dict(projetos_dict[ultimo])
             self.status_bar.showMessage(f"Projeto '{ultimo}' restaurado.")
+        elif projetos_dict:
+            primeiro = list(projetos_dict.keys())[0]
+            self._aplicar_projeto_dict(projetos_dict[primeiro])
+            self.status_bar.showMessage(f"Projeto '{primeiro}' restaurado.")
         else:
-            self._carregar_preset("Dia 14 de Agosto")
-            self.status_bar.showMessage("Pronto. Selecione um modelo ou edite os valores na matriz de dados.")
+            self._novo_projeto_em_branco()
+            self.status_bar.showMessage("Pronto. Digite os dados na matriz ou escolha um Modelo Pronto.")
 
     def _atualizar_botoes_modo(self):
         self.btn_modo_linhas.setObjectName("btnSegmentActive" if self.tipo_grafico_atual == "linhas" else "btnSegment")
@@ -650,11 +706,17 @@ class VesperaMainWindow(QMainWindow):
         else:
             if registros:
                 df_loaded = pd.DataFrame(registros)
-                cols_l = ["Pontos", "Manha", "Tarde", "Noite"]
-                for col in cols_l:
-                    if col not in df_loaded.columns:
-                        df_loaded[col] = np.nan if col != "Pontos" else ""
-                df_alvo = df_loaded[cols_l].copy()
+                colunas_salvas = proj_dict.get("colunas")
+                if colunas_salvas and all(c in df_loaded.columns for c in colunas_salvas):
+                    df_alvo = df_loaded[colunas_salvas].copy()
+                elif {"Manha", "Tarde", "Noite"}.intersection(set(df_loaded.columns)):
+                    cols_l = ["Pontos", "Manha", "Tarde", "Noite"]
+                    for col in cols_l:
+                        if col not in df_loaded.columns:
+                            df_loaded[col] = np.nan if col != "Pontos" else ""
+                    df_alvo = df_loaded[cols_l].copy()
+                else:
+                    df_alvo = df_loaded.copy()
             else:
                 df_alvo = PRESETS_LINHAS["Dia 14 de Agosto"]["df"].copy()
 
@@ -778,46 +840,68 @@ class VesperaMainWindow(QMainWindow):
         }
 
         if self.tipo_grafico_atual == "linhas":
+            col_id = df.columns[0] if len(df.columns) > 0 else "Pontos"
+            colunas_series = [c for c in df.columns if c != col_id]
+            self.plot_widget.atualizar_series_dinamicas(colunas_series)
+            series_ativas = self.plot_widget.obter_series_linhas_ativas()
+            if not series_ativas:
+                series_ativas = colunas_series
+
             modo_linhas = cfg.get("modo_estilo_linhas", "Opção 1: Linha + Símbolo (Line + Symbol)")
             descritivo = cfg.get("rotulos_descritivos_legenda", True)
             tamanho_marcador = float(cfg.get("tamanho_marcador", 6.0))
 
-            if "Opção 1" in modo_linhas or (cfg.get("com_marcadores") and not cfg.get("com_linhas_distintas")):
-                estilos_linhas = {"Manha": "-", "Tarde": "-", "Noite": "-"}
-                com_marcadores = True
-                marcadores_map = {"Manha": "o", "Tarde": "s", "Noite": "^"}
-                rotulos_legenda = (
-                    {"Manha": "Manhã (Bolinha)", "Tarde": "Tarde (Quadrado)", "Noite": "Noite (Triângulo)"}
-                    if descritivo
-                    else {"Manha": "Manhã", "Tarde": "Tarde", "Noite": "Noite"}
-                )
-            elif "Opção 2" in modo_linhas or (cfg.get("com_linhas_distintas") and not cfg.get("com_marcadores")):
-                estilos_linhas = {"Manha": "--", "Tarde": "-", "Noite": ":"}
-                com_marcadores = False
-                marcadores_map = None
-                rotulos_legenda = (
-                    {"Manha": "Manhã (Tracejada)", "Tarde": "Tarde (Contínua)", "Noite": "Noite (Pontilhada)"}
-                    if descritivo
-                    else {"Manha": "Manhã", "Tarde": "Tarde", "Noite": "Noite"}
-                )
-            elif "Personalizado" in modo_linhas:
-                estilos_linhas = {
-                    "Manha": cfg.get("traco_manha", "-"),
-                    "Tarde": cfg.get("traco_tarde", "-"),
-                    "Noite": cfg.get("traco_noite", "-"),
-                }
-                marcadores_map = {
-                    "Manha": cfg.get("marcador_manha", "o"),
-                    "Tarde": cfg.get("marcador_tarde", "s"),
-                    "Noite": cfg.get("marcador_noite", "^"),
-                }
-                com_marcadores = any(v not in (None, "", "None") for v in marcadores_map.values())
-                rotulos_legenda = {"Manha": "Manhã", "Tarde": "Tarde", "Noite": "Noite"}
+            is_legado = (colunas_series == ["Manha", "Tarde", "Noite"])
+
+            if is_legado:
+                if "Opção 1" in modo_linhas or (cfg.get("com_marcadores") and not cfg.get("com_linhas_distintas")):
+                    estilos_linhas = {"Manha": "-", "Tarde": "-", "Noite": "-"}
+                    com_marcadores = True
+                    marcadores_map = {"Manha": "o", "Tarde": "s", "Noite": "^"}
+                    rotulos_legenda = (
+                        {"Manha": "Manhã (Bolinha)", "Tarde": "Tarde (Quadrado)", "Noite": "Noite (Triângulo)"}
+                        if descritivo
+                        else {"Manha": "Manhã", "Tarde": "Tarde", "Noite": "Noite"}
+                    )
+                elif "Opção 2" in modo_linhas or (cfg.get("com_linhas_distintas") and not cfg.get("com_marcadores")):
+                    estilos_linhas = {"Manha": "--", "Tarde": "-", "Noite": ":"}
+                    com_marcadores = False
+                    marcadores_map = None
+                    rotulos_legenda = (
+                        {"Manha": "Manhã (Tracejada)", "Tarde": "Tarde (Contínua)", "Noite": "Noite (Pontilhada)"}
+                        if descritivo
+                        else {"Manha": "Manhã", "Tarde": "Tarde", "Noite": "Noite"}
+                    )
+                elif "Personalizado" in modo_linhas:
+                    estilos_linhas = {
+                        "Manha": cfg.get("traco_manha", "-"),
+                        "Tarde": cfg.get("traco_tarde", "-"),
+                        "Noite": cfg.get("traco_noite", "-"),
+                    }
+                    marcadores_map = {
+                        "Manha": cfg.get("marcador_manha", "o"),
+                        "Tarde": cfg.get("marcador_tarde", "s"),
+                        "Noite": cfg.get("marcador_noite", "^"),
+                    }
+                    com_marcadores = any(v not in (None, "", "None") for v in marcadores_map.values())
+                    rotulos_legenda = {"Manha": "Manhã", "Tarde": "Tarde", "Noite": "Noite"}
+                else:
+                    estilos_linhas = {"Manha": "-", "Tarde": "-", "Noite": "-"}
+                    com_marcadores = False
+                    marcadores_map = None
+                    rotulos_legenda = {"Manha": "Manhã", "Tarde": "Tarde", "Noite": "Noite"}
             else:
-                estilos_linhas = {"Manha": "-", "Tarde": "-", "Noite": "-"}
-                com_marcadores = False
-                marcadores_map = None
-                rotulos_legenda = {"Manha": "Manhã", "Tarde": "Tarde", "Noite": "Noite"}
+                LISTA_MARCADORES = ["o", "s", "^", "D", "v", "<", ">", "p", "*"]
+                LISTA_LINHAS = ["-", "--", "-.", ":"]
+                if "Opção 2" in modo_linhas:
+                    com_marcadores = False
+                    estilos_linhas = {c: LISTA_LINHAS[i % len(LISTA_LINHAS)] for i, c in enumerate(colunas_series)}
+                    marcadores_map = None
+                else:
+                    com_marcadores = True
+                    estilos_linhas = {c: "-" for c in colunas_series}
+                    marcadores_map = {c: LISTA_MARCADORES[i % len(LISTA_MARCADORES)] for i, c in enumerate(colunas_series)}
+                rotulos_legenda = {c: c for c in colunas_series}
 
             renderizar_grafico_linhas(
                 df=df,
@@ -826,7 +910,7 @@ class VesperaMainWindow(QMainWindow):
                 rotulo_y=meta["rotulo_y"],
                 min_y=meta["min_y"],
                 max_y=meta["max_y"],
-                series_ativas=self.plot_widget.obter_series_linhas_ativas(),
+                series_ativas=series_ativas,
                 cores_periodos=self.sidebar.obter_cores_linhas_ativas(),
                 estilos_linhas=estilos_linhas,
                 fonte_nome=cfg["opcao_fonte"],
@@ -966,16 +1050,168 @@ class VesperaMainWindow(QMainWindow):
             self.cmb_projetos_salvos.addItem(f"{nome} [{tipo_str}] ({data_str})", nome)
         self._updating_project_combo = False
 
-    def _salvar_projeto_atual(self):
+    # -----------------------------------------------------------------------
+    # Gerenciamento de Projetos (.vespera / .json) e Modelos
+    # -----------------------------------------------------------------------
+    def _novo_projeto_em_branco(self):
+        """Inicializa a interface com um projeto limpo e matriz de dados vazia."""
+        self.caminho_arquivo_atual = None
+        self.tipo_grafico_atual = "linhas"
+        self.nome_projeto_atual = "Novo Experimento"
+        self.txt_nome_projeto.setText("Novo Experimento")
+        self.table_widget.iniciar_em_branco()
+        self._atualizar_botoes_modo()
+        self._atualizar_titulo_janela()
+        self.atualizar_grafico()
+        self.status_bar.showMessage("Novo projeto em branco pronto.")
+
+    def _abrir_galeria_modelos(self):
+        """Abre a Galeria de Modelos Prontos e Presets Acadêmicos."""
+        from ui.templates_dialog import TemplatesGalleryDialog
+        dlg = TemplatesGalleryDialog(self)
+        dlg.templateSelected.connect(self._carregar_preset)
+        dlg.exec()
+
+    def _salvar_projeto(self):
+        """Salva no arquivo .vespera já associado ou solicita Salvar Como se for novo."""
+        if self.caminho_arquivo_atual:
+            payload = self._construir_payload_atual()
+            sucesso = self.project_manager.salvar_arquivo_projeto(self.caminho_arquivo_atual, payload)
+            if sucesso:
+                nome_final = payload["nome_projeto"]
+                self.banco_projetos.setdefault("projetos", {})[nome_final] = payload
+                self.banco_projetos["ultimo_projeto_ativo"] = nome_final
+                self.project_manager.gravar_banco(self.banco_projetos)
+                self._adicionar_projeto_recente(self.caminho_arquivo_atual)
+                self._atualizar_combo_projetos()
+                self._atualizar_titulo_janela()
+                self.status_bar.showMessage(f"Projeto salvo com sucesso em: {self.caminho_arquivo_atual}")
+            else:
+                QMessageBox.critical(self, "Erro ao Salvar", f"Não foi possível salvar em {self.caminho_arquivo_atual}")
+        else:
+            self._salvar_projeto_como()
+
+    def _salvar_projeto_como(self):
+        """Salva o projeto em um novo arquivo individual (.vespera ou .json)."""
         payload = self._construir_payload_atual()
-        nome_final = payload["nome_projeto"]
-        self.banco_projetos.setdefault("projetos", {})[nome_final] = payload
-        self.banco_projetos["ultimo_projeto_ativo"] = nome_final
-        self.project_manager.gravar_banco(self.banco_projetos)
-        self.nome_projeto_atual = nome_final
-        self.txt_nome_projeto.setText(nome_final)
-        self._atualizar_combo_projetos()
-        self.status_bar.showMessage(f"Projeto '{nome_final}' salvo com sucesso em {payload['atualizado_em']}.")
+        nome_sugestao = payload["nome_projeto"].replace(" ", "_").lower()
+        if not nome_sugestao.endswith(".vespera"):
+            nome_sugestao += ".vespera"
+
+        caminho, _ = QFileDialog.getSaveFileName(
+            self,
+            "Salvar Projeto Como",
+            nome_sugestao,
+            "Projeto Vespera Sci (*.vespera);;Arquivo JSON (*.json)",
+        )
+        if caminho:
+            sucesso = self.project_manager.salvar_arquivo_projeto(caminho, payload)
+            if sucesso:
+                self.caminho_arquivo_atual = caminho
+                nome_final = payload["nome_projeto"]
+                self.nome_projeto_atual = nome_final
+                self.txt_nome_projeto.setText(nome_final)
+                self.banco_projetos.setdefault("projetos", {})[nome_final] = payload
+                self.banco_projetos["ultimo_projeto_ativo"] = nome_final
+                self.project_manager.gravar_banco(self.banco_projetos)
+                self._adicionar_projeto_recente(caminho)
+                self._atualizar_combo_projetos()
+                self._atualizar_titulo_janela()
+                self.status_bar.showMessage(f"Projeto salvo em: {caminho}")
+            else:
+                QMessageBox.critical(self, "Erro ao Salvar", f"Não foi possível salvar o arquivo {caminho}")
+
+    def _abrir_arquivo_projeto(self):
+        """Abre diálogo de seleção para arquivos de projeto (.vespera / .json)."""
+        caminho, _ = QFileDialog.getOpenFileName(
+            self,
+            "Abrir Arquivo de Projeto (.vespera / .json)",
+            "",
+            "Projetos Vespera Sci (*.vespera *.json);;Todos os Arquivos (*.*)",
+        )
+        if caminho:
+            self._abrir_caminho_projeto(caminho)
+
+    def _abrir_caminho_projeto(self, caminho: str):
+        if not os.path.exists(caminho):
+            QMessageBox.warning(self, "Arquivo Não Encontrado", f"O arquivo não foi localizado:\n{caminho}")
+            return
+        proj = self.project_manager.carregar_arquivo_projeto(caminho)
+        if not proj:
+            try:
+                with open(caminho, "r", encoding="utf-8") as f:
+                    proj = json.load(f)
+            except Exception:
+                proj = {}
+        if isinstance(proj, dict) and "dados" in proj:
+            self.caminho_arquivo_atual = caminho
+            self._aplicar_projeto_dict(proj)
+            nome_imp = self.nome_projeto_atual
+            self.banco_projetos.setdefault("projetos", {})[nome_imp] = proj
+            self.banco_projetos["ultimo_projeto_ativo"] = nome_imp
+            self.project_manager.gravar_banco(self.banco_projetos)
+            self._adicionar_projeto_recente(caminho)
+            self._atualizar_combo_projetos()
+            self._atualizar_titulo_janela()
+            self.status_bar.showMessage(f"Projeto carregado: {os.path.basename(caminho)}")
+        else:
+            QMessageBox.warning(self, "Formato Inválido", "O arquivo selecionado não contém um projeto válido.")
+
+    def _obter_projetos_recentes(self) -> list:
+        raw = self.settings.value("recent_projects", [])
+        if isinstance(raw, list):
+            return [str(p) for p in raw if os.path.exists(str(p))]
+        return []
+
+    def _adicionar_projeto_recente(self, caminho: str):
+        if not caminho:
+            return
+        caminho_abs = os.path.abspath(caminho)
+        recentes = self._obter_projetos_recentes()
+        if caminho_abs in recentes:
+            recentes.remove(caminho_abs)
+        recentes.insert(0, caminho_abs)
+        recentes = recentes[:8]
+        self.settings.setValue("recent_projects", recentes)
+        self._atualizar_menu_recentes()
+
+    def _atualizar_menu_recentes(self):
+        if not hasattr(self, "menu_recentes"):
+            return
+        self.menu_recentes.clear()
+        recentes = self._obter_projetos_recentes()
+        if not recentes:
+            act_vazio = QAction("(Nenhum projeto recente)", self)
+            act_vazio.setEnabled(False)
+            self.menu_recentes.addAction(act_vazio)
+            return
+
+        for p in recentes:
+            nome_exib = f"{os.path.basename(p)}  ({p})"
+            act = QAction(nome_exib, self)
+            act.setIcon(get_icon("file-text", size=14))
+            act.triggered.connect(lambda _, c=p: self._abrir_caminho_projeto(c))
+            self.menu_recentes.addAction(act)
+
+        self.menu_recentes.addSeparator()
+        act_limpar = QAction("Limpar Histórico Recente", self)
+        act_limpar.triggered.connect(self._limpar_projetos_recentes)
+        self.menu_recentes.addAction(act_limpar)
+
+    def _limpar_projetos_recentes(self):
+        self.settings.setValue("recent_projects", [])
+        self._atualizar_menu_recentes()
+
+    def _atualizar_titulo_janela(self):
+        if self.caminho_arquivo_atual:
+            nome = os.path.basename(self.caminho_arquivo_atual)
+            self.setWindowTitle(f"{nome} — Vespera Sci v1.0.0 (Beta)")
+        else:
+            nome = self.nome_projeto_atual or "Sem Título"
+            self.setWindowTitle(f"{nome} [Não salvo] — Vespera Sci v1.0.0 (Beta)")
+
+    def _salvar_projeto_atual(self):
+        self._salvar_projeto()
 
     def _on_projeto_salvo_selecionado(self, index: int):
         if self._updating_project_combo or index <= 0:

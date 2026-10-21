@@ -27,6 +27,7 @@ from core.plot_engine import (
     renderizar_grafico_dispersao,
     renderizar_grafico_linhas,
 )
+from core.project_manager import ProjectManager
 from core.excel_exporter import (
     gerar_excel_barras_bytes,
     gerar_excel_boxplot_bytes,
@@ -52,6 +53,19 @@ class TestSanitizerAndStats(unittest.TestCase):
         self.assertEqual(df_san.iloc[0]["Pontos"], "P1")
         self.assertEqual(df_san.iloc[0]["Manha"], 27.4)
         self.assertEqual(df_san.iloc[0]["Tarde"], 28.5)
+
+    def test_sanitizar_dados_tabela_colunas_dinamicas(self):
+        # Testa sanitização com séries arbitrárias e personalizadas
+        df_raw = pd.DataFrame({
+            "Pontos": ["P1", None],
+            "Sensor Norte": [265.0, 27.1],
+            "Sensor Sul": ["28,3", 29.4],
+        })
+        df_san, mod = sanitizar_dados_tabela(df_raw)
+        self.assertTrue(mod)
+        self.assertEqual(df_san.iloc[1]["Pontos"], "P2")
+        self.assertEqual(df_san.iloc[0]["Sensor Norte"], 26.5)
+        self.assertEqual(df_san.iloc[0]["Sensor Sul"], 28.3)
 
     def test_calcular_estatisticas_serie(self):
         vals = [10.0, 20.0, 30.0]
@@ -106,6 +120,37 @@ class TestPlotEngine(unittest.TestCase):
             fonte_nome="Arial",
             tamanho_fonte=11.0,
             espessura_linha=1.2,
+            com_marcadores=True,
+            bordas_config=self.bordas,
+            ticks_config=self.ticks,
+            legenda_config=self.legenda,
+            exibir_grade=True,
+        )
+        self.assertIsNotNone(fig)
+        self.assertEqual(len(fig.axes), 1)
+
+    def test_render_linhas_dinamico_multiplas_series(self):
+        # Gráfico dinâmico com 4 séries customizadas
+        df_dinamico = pd.DataFrame({
+            "Pontos": [f"P{i+1}" for i in range(5)],
+            "Sensor Alpha": [24.1, 24.5, 25.0, 25.3, 25.1],
+            "Sensor Beta": [26.0, 26.4, 27.1, 26.8, 26.5],
+            "Sensor Gamma": [28.2, 28.5, 29.0, 28.8, 28.4],
+            "Sensor Delta": [22.0, 22.3, 22.7, 23.0, 22.9],
+        })
+        fig = renderizar_grafico_linhas(
+            df=df_dinamico,
+            titulo_grafico="Monitoramento Multissensorial",
+            rotulo_x="Estações",
+            rotulo_y="Temperatura (°C)",
+            min_y=20.0,
+            max_y=32.0,
+            series_ativas=["Sensor Alpha", "Sensor Gamma"],
+            cores_periodos={},
+            estilos_linhas={},
+            fonte_nome="Arial",
+            tamanho_fonte=11.0,
+            espessura_linha=1.5,
             com_marcadores=True,
             bordas_config=self.bordas,
             ticks_config=self.ticks,
@@ -226,6 +271,70 @@ class TestExcelExporter(unittest.TestCase):
         p = PRESETS_BOXPLOT["Distribuição Térmica — Bosque vs. Estacionamento"]
         data = gerar_excel_boxplot_bytes(p["df"], "Boxplot", "", "Ambientes", "Ta")
         self.assertTrue(data.startswith(b"PK\x03\x04"))
+
+
+
+class TestProjectManagerAndFiles(unittest.TestCase):
+    """Testes de persistência de arquivos .vespera e retrocompatibilidade."""
+
+    def test_salvar_e_carregar_arquivo_vespera_dinamico(self):
+        import tempfile
+        df_teste = pd.DataFrame({
+            "Pontos": ["P1", "P2", "P3"],
+            "Sensor A": [21.5, 22.0, 22.5],
+            "Sensor B": [25.0, 25.5, 26.0],
+        })
+        payload = ProjectManager.construir_payload(
+            nome_projeto="Projeto Dinamico Teste",
+            tipo_grafico="linhas",
+            df=df_teste,
+            titulo_dia="Dia de Teste",
+            titulo_grafico="GRAFICO TESTE",
+            min_y=20.0,
+            max_y=30.0,
+            cfg={"opcao_fonte": "Arial"},
+        )
+        self.assertEqual(payload["formato"], "vespera_project")
+        self.assertEqual(payload["versao_formato"], "1.0.0")
+        self.assertEqual(payload["colunas"], ["Pontos", "Sensor A", "Sensor B"])
+
+        with tempfile.NamedTemporaryFile(suffix=".vespera", delete=False) as tmp:
+            tmp_path = tmp.name
+
+        try:
+            sucesso = ProjectManager.salvar_arquivo_projeto(tmp_path, payload)
+            self.assertTrue(sucesso)
+            self.assertTrue(os.path.exists(tmp_path))
+
+            carregado = ProjectManager.carregar_arquivo_projeto(tmp_path)
+            self.assertEqual(carregado["nome_projeto"], "Projeto Dinamico Teste")
+            self.assertEqual(carregado["colunas"], ["Pontos", "Sensor A", "Sensor B"])
+            self.assertEqual(len(carregado["dados"]), 3)
+            self.assertEqual(carregado["dados"][0]["Sensor A"], 21.5)
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+
+    def test_retrocompatibilidade_projetos_legados(self):
+        # Simula estrutura antiga do projetos_salvos.json sem chaves novas
+        payload_legado = {
+            "nome_projeto": "Projeto Legado",
+            "tipo_grafico": "linhas",
+            "titulo_dia": "14 de Agosto",
+            "titulo_grafico": "DIA 14",
+            "min_y": 24.0,
+            "max_y": 33.0,
+            "dados": [
+                {"Pontos": "P1", "Manha": 26.2, "Tarde": 30.1, "Noite": 25.4},
+                {"Pontos": "P2", "Manha": 26.5, "Tarde": 30.5, "Noite": 25.8},
+            ],
+            "config": {"exibir_grade": True},
+        }
+        df_legado = pd.DataFrame(payload_legado["dados"])
+        self.assertIn("Manha", df_legado.columns)
+        self.assertIn("Tarde", df_legado.columns)
+        self.assertIn("Noite", df_legado.columns)
+        self.assertEqual(len(df_legado), 2)
 
 
 if __name__ == "__main__":

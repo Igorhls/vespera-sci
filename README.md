@@ -56,6 +56,10 @@ O Vespera Sci disponibiliza quatro motores de renderização gráfica baseados e
 
 ## 3. Recursos de Interface e Produtividade
 
+* **Início Limpo e Modular:** A aplicação inicializa em branco por padrão, permitindo montar experimentos do zero com facilidade (`Ctrl+N`), preservando sessões e projetos anteriores.
+* **Galeria de Modelos Prontos (Templates):** Acesso rápido a modelos pré-configurados e dados experimentais de referência para séries temporais, barras com desvio, dispersão com regressão e diagramas de boxplot.
+* **Séries e Colunas Dinâmicas:** Adicione (`+ Série`) ou remova (`- Série`) colunas livremente no modo de séries temporais. Dê duplo clique no cabeçalho de qualquer coluna para renomeá-la de forma imediata.
+* **Gerenciamento de Arquivos de Projeto (`.vespera`):** Salve e reabra projetos completos em arquivos independentes com atalhos padrão (`Ctrl+O`, `Ctrl+S`, `Ctrl+Shift+S`) e histórico persistente de projetos recentes.
 * **Colagem Direta no Grid (`Ctrl+V`):** Permite copiar blocos de dados de planilhas eletrônicas (Excel, Google Sheets, LibreOffice Calc) e colá-los diretamente sobre a tabela. As linhas são expandidas dinamicamente conforme necessário.
 * **Histórico de Edição (`Ctrl+Z` e `Ctrl+Y`):** Mecanismo de desfazer e refazer integrado à matriz de dados, retendo até 60 etapas de alterações.
 * **Sinalização Visual de Células Vazias / NaN:** Destaque em tom âmbar nas células com valores numéricos faltantes, prevenindo inconsistências em relatórios analíticos.
@@ -140,7 +144,8 @@ vespera-sci/
 │   ├── main_window.py          # Janela principal, barra de menus e gerenciamento de abas
 │   ├── plot_canvas_widget.py   # Visualizador do gráfico com toolbar e botões de exportação
 │   ├── sidebar_controls.py     # Painel de customização estética de eixos, traços e cores
-│   └── styles.py               # Folhas de estilo QSS para temas Claro e Escuro
+│   ├── styles.py               # Folhas de estilo QSS para temas Claro e Escuro
+│   └── templates_dialog.py     # Diálogo da Galeria de Modelos e Presets Acadêmicos
 │
 ├── tests/                      # Suíte de testes automatizados
 │   └── test_all.py             # Testes unitários de sanitização, estatísticas, plotagem e exportação
