@@ -25,6 +25,7 @@ jobs:
   test:
     name: Suíte de Testes (unittest / pytest)
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Obter Código
         uses: actions/checkout@v4
@@ -33,7 +34,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
 
       - name: Instalar Dependências
         run: |
@@ -49,6 +49,7 @@ jobs:
     name: Compilar Executável Windows (x64)
     needs: test
     runs-on: windows-latest
+    timeout-minutes: 10
     steps:
       - name: Obter Código
         uses: actions/checkout@v4
@@ -57,7 +58,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
 
       - name: Instalar Dependências
         run: |
@@ -90,6 +90,7 @@ jobs:
     name: Compilar macOS Apple Silicon (.dmg / M1/M2/M3/M4)
     needs: test
     runs-on: macos-14
+    timeout-minutes: 10
     steps:
       - name: Obter Código
         uses: actions/checkout@v4
@@ -98,7 +99,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
 
       - name: Instalar Dependências
         run: |
@@ -119,6 +119,7 @@ jobs:
           sips -z 512 512   assets/app_icon.png --out AppIcon.iconset/icon_256x256@2x.png
           sips -z 512 512   assets/app_icon.png --out AppIcon.iconset/icon_512x512.png
           iconutil -c icns AppIcon.iconset -o assets/app_icon.icns
+          rm -rf AppIcon.iconset
 
       - name: Compilar Bundle .app
         run: |
@@ -136,6 +137,7 @@ jobs:
           cp -r dist/VesperaSci.app dmg_root/
           ln -s /Applications dmg_root/Applications
           hdiutil create -volname "Vespera Sci" -srcfolder dmg_root -ov -format UDZO dist/VesperaSci-macOS-AppleSilicon-arm64.dmg
+          rm -rf dmg_root
 
       - name: Armazenar Artefato macOS Apple Silicon
         uses: actions/upload-artifact@v4
@@ -148,6 +150,7 @@ jobs:
     if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && inputs.publish_release == true)
     needs: [build-windows, build-macos-arm]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: write
     steps:
