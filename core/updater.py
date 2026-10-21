@@ -1,7 +1,9 @@
 """
 Sistema de Auto-Update conectado ao GitHub (https://github.com/Igorhls/vespera-sci.git).
-Permite verificar se há novos commits ou novas versões no repositório oficial,
-baixar o pacote atualizado preservando os projetos salvos do usuário e reiniciar o aplicativo.
+Suporta dois canais de atualização independentes:
+1. Canal Oficial Estável (Padrão): Consulta exclusivamente as Releases oficiais publicadas no GitHub.
+2. Canal de Desenvolvimento (Dev): Consulta commits recentes da branch main para testadores e desenvolvedores.
+Preserva integralmente os projetos salvos e dados do usuário durante atualizações.
 """
 
 import io
@@ -65,7 +67,6 @@ def ler_versao_local() -> dict:
             pass
 
     if not dados["local_sha"]:
-        # Tenta obter do git local caso seja um clone git
         try:
             res = subprocess.run(
                 ["git", "rev-parse", "HEAD"],
@@ -82,7 +83,7 @@ def ler_versao_local() -> dict:
     return dados
 
 
-def _comparar_versoes(v_remota: str, v_local: str) -> int:
+def comparar_versoes(v_remota: str, v_local: str) -> int:
     """Retorna 1 se v_remota > v_local, 0 se iguais, -1 se menor."""
     def parse(v):
         limpo = str(v).lstrip("vV").strip()
@@ -102,11 +103,11 @@ def _comparar_versoes(v_remota: str, v_local: str) -> int:
     return 0
 
 
-def verificar_atualizacao_github(timeout: int = 10) -> dict:
+def verificar_atualizacao_github(canal: str = "stable", timeout: int = 10) -> dict:
     """
-    Consulta o repositório Igorhls/vespera-sci no GitHub para verificar:
-    1. O arquivo version.json remoto na branch main.
-    2. O último commit na branch main (via GitHub API).
+    Verifica atualizações no repositório Igorhls/vespera-sci conforme o canal selecionado:
+    - 'stable' (Padrão): Verifica exclusivamente as Releases oficiais publicadas no GitHub.
+    - 'dev': Verifica novos commits enviados diretamente para a branch 'main'.
     """
     local_info = ler_versao_local()
     versao_local = local_info.get("version", "1.0.0")
@@ -117,7 +118,85 @@ def verificar_atualizacao_github(timeout: int = 10) -> dict:
         "User-Agent": "VesperaSci-Updater/1.0",
     }
 
-    # 1. Busca version.json remoto
+    # =======================================================================
+    # CANAL 1: Oficial Estável (Releases do GitHub)
+    # =======================================================================
+    if canal == "stable":
+        url_release = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/releases/latest"
+        try:
+            r = requests.get(url_release, headers=headers, timeout=timeout)
+            if r.status_code == 200:
+                rel = r.json()
+                tag_raw = rel.get("tag_name", "").strip()
+                tag_clean = tag_raw.lstrip("vV").strip()
+                titulo = rel.get("name", f"Versão {tag_clean}")
+                notas = rel.get("body", "Notas da versão não fornecidas.")
+                data_pub = rel.get("published_at", "")[:10]
+                html_url = rel.get("html_url", f"https://github.com/{REPO_OWNER}/{REPO_NAME}/releases")
+                download_url = rel.get("zipball_url", "")
+
+                for asset in rel.get("assets", []):
+                    nome_asset = asset.get("name", "").lower()
+                    if sys.platform == "win32" and nome_asset.endswith(".zip"):
+                        download_url = asset.get("browser_download_url", download_url)
+                        break
+
+                cmp_ver = comparar_versoes(tag_clean, versao_local)
+                tem_atualizacao = (cmp_ver > 0)
+
+                return {
+                    "sucesso": True,
+                    "canal": "stable",
+                    "tem_atualizacao": tem_atualizacao,
+                    "versao_local": versao_local,
+                    "versao_remota": tag_clean,
+                    "tag_remota": tag_raw,
+                    "titulo_release": titulo,
+                    "notas_versao": notas,
+                    "data_remota": data_pub,
+                    "html_url": html_url,
+                    "download_url": download_url,
+                    "sha_local": sha_local[:7] if sha_local else "N/D",
+                    "sha_remoto": tag_raw,
+                    "sha_remoto_full": "",
+                    "mensagem_commit": titulo,
+                }
+            elif r.status_code == 404:
+                return {
+                    "sucesso": True,
+                    "canal": "stable",
+                    "tem_atualizacao": False,
+                    "versao_local": versao_local,
+                    "versao_remota": versao_local,
+                    "tag_remota": f"v{versao_local}",
+                    "titulo_release": "Nenhuma release publicada",
+                    "notas_versao": "O repositório ainda não possui releases estáveis publicadas.",
+                    "data_remota": "",
+                    "html_url": f"https://github.com/{REPO_OWNER}/{REPO_NAME}/releases",
+                    "download_url": "",
+                    "sha_local": sha_local[:7] if sha_local else "N/D",
+                    "sha_remoto": "N/D",
+                    "sha_remoto_full": "",
+                    "mensagem_commit": "Versão estável atualizada.",
+                }
+            else:
+                return {
+                    "sucesso": False,
+                    "canal": "stable",
+                    "erro": f"Resposta inesperada do GitHub (HTTP {r.status_code}).",
+                    "versao_local": versao_local,
+                }
+        except Exception as e:
+            return {
+                "sucesso": False,
+                "canal": "stable",
+                "erro": f"Falha de conexão com o GitHub: {e}",
+                "versao_local": versao_local,
+            }
+
+    # =======================================================================
+    # CANAL 2: Desenvolvimento (Commits da branch main)
+    # =======================================================================
     ts = int(time.time())
     url_version = f"https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/{BRANCH}/version.json?t={ts}"
     remoto_ver_info = {}
@@ -128,11 +207,11 @@ def verificar_atualizacao_github(timeout: int = 10) -> dict:
     except Exception as e:
         return {
             "sucesso": False,
+            "canal": "dev",
             "erro": f"Não foi possível conectar ao GitHub: {e}",
             "versao_local": versao_local,
         }
 
-    # 2. Busca o último commit da branch main
     url_commit = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/commits/{BRANCH}"
     ultimo_sha = ""
     msg_commit = ""
@@ -152,29 +231,37 @@ def verificar_atualizacao_github(timeout: int = 10) -> dict:
     notas_remotas = remoto_ver_info.get("notes", "")
     data_remota = remoto_ver_info.get("release_date", data_commit)
 
-    cmp_ver = _comparar_versoes(versao_remota, versao_local)
+    cmp_ver = comparar_versoes(versao_remota, versao_local)
     sha_diferente = bool(ultimo_sha and sha_local and ultimo_sha != sha_local)
-
     tem_atualizacao = (cmp_ver > 0) or sha_diferente
 
     return {
         "sucesso": True,
+        "canal": "dev",
         "tem_atualizacao": tem_atualizacao,
         "versao_local": versao_local,
         "versao_remota": versao_remota,
         "sha_local": sha_local[:7] if sha_local else "N/D",
         "sha_remoto": ultimo_sha[:7] if ultimo_sha else "N/D",
         "sha_remoto_full": ultimo_sha,
-        "mensagem_commit": msg_commit or notas_remotas or "Atualização disponível no repositório.",
+        "mensagem_commit": msg_commit or notas_remotas or "Atualização de desenvolvimento disponível.",
         "notas_versao": notas_remotas,
         "data_remota": data_remota,
+        "html_url": f"https://github.com/{REPO_OWNER}/{REPO_NAME}/commits/{BRANCH}",
+        "download_url": f"https://github.com/{REPO_OWNER}/{REPO_NAME}/archive/refs/heads/{BRANCH}.zip",
     }
 
 
-def baixar_e_aplicar_atualizacao(sha_remoto_full: str = "", progress_callback=None) -> dict:
+def baixar_e_aplicar_atualizacao(
+    canal: str = "stable",
+    download_url: str = "",
+    sha_remoto_full: str = "",
+    progress_callback=None,
+) -> dict:
     """
-    Baixa o pacote .zip mais recente da branch main no GitHub, extrai e atualiza os arquivos
-    da aplicação preservando os dados e projetos salvos do usuário.
+    Baixa e atualiza os arquivos da aplicação preservando dados e projetos salvos.
+    No canal dev com git disponível, executa git pull origin main.
+    Caso contrário, efetua download seguro via stream HTTP com extração atômica.
     """
     raiz = obter_diretorio_raiz()
     pasta_temp = os.path.join(raiz, "updater_temp")
@@ -184,11 +271,10 @@ def baixar_e_aplicar_atualizacao(sha_remoto_full: str = "", progress_callback=No
             progress_callback(pct, msg)
 
     try:
-        report(5, "Iniciando conexão com o GitHub...")
+        report(5, "Iniciando conexão de atualização...")
 
-        # Se a pasta for um repositório Git com git instalado, tenta git pull primeiro
         git_dir = os.path.join(raiz, ".git")
-        if os.path.isdir(git_dir):
+        if canal == "dev" and os.path.isdir(git_dir):
             report(20, "Sincronizando via Git (git pull origin main)...")
             try:
                 res = subprocess.run(
@@ -205,13 +291,13 @@ def baixar_e_aplicar_atualizacao(sha_remoto_full: str = "", progress_callback=No
                     report(100, "Atualização concluída com sucesso via Git!")
                     return {"sucesso": True, "metodo": "git_pull", "detalhe": res.stdout.strip()}
             except Exception:
-                pass  # Continua para o download via ZIP do GitHub caso git não esteja disponível
+                pass
 
-        # Download direto do arquivo ZIP da branch main (não exige Git instalado na máquina da usuária)
-        url_zip = f"https://github.com/{REPO_OWNER}/{REPO_NAME}/archive/refs/heads/{BRANCH}.zip"
-        report(15, "Baixando pacote atualizado do GitHub...")
+        url_alvo = download_url or f"https://github.com/{REPO_OWNER}/{REPO_NAME}/archive/refs/heads/{BRANCH}.zip"
+        report(15, "Baixando pacote oficial do GitHub...")
 
-        resp = requests.get(url_zip, stream=True, timeout=30)
+        headers = {"User-Agent": "VesperaSci-Updater/1.0"}
+        resp = requests.get(url_alvo, headers=headers, stream=True, timeout=35)
         resp.raise_for_status()
 
         total_bytes = int(resp.headers.get("content-length", 0))
@@ -224,7 +310,7 @@ def baixar_e_aplicar_atualizacao(sha_remoto_full: str = "", progress_callback=No
                 baixados += len(chunk)
                 if total_bytes > 0:
                     pct = 15 + int((baixados / total_bytes) * 50)
-                    report(min(pct, 65), f"Baixando arquivos... ({baixados // 1024} KB)")
+                    report(min(pct, 65), f"Baixando pacote... ({baixados // 1024} KB)")
 
         report(70, "Extraindo pacote de atualização...")
         if os.path.exists(pasta_temp):
@@ -240,10 +326,8 @@ def baixar_e_aplicar_atualizacao(sha_remoto_full: str = "", progress_callback=No
             for d in os.listdir(pasta_temp)
             if os.path.isdir(os.path.join(pasta_temp, d))
         ]
-        if not subpastas:
-            raise RuntimeError("Estrutura de arquivo ZIP inválida.")
+        origem_extraida = subpastas[0] if subpastas else pasta_temp
 
-        origem_extraida = subpastas[0]
         report(85, "Atualizando módulos do Vespera Sci (preservando seus projetos salvos)...")
 
         for item in os.listdir(origem_extraida):

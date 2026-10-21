@@ -28,6 +28,7 @@ from core.plot_engine import (
     renderizar_grafico_linhas,
 )
 from core.project_manager import ProjectManager
+from core.updater import comparar_versoes, verificar_atualizacao_github
 from core.excel_exporter import (
     gerar_excel_barras_bytes,
     gerar_excel_boxplot_bytes,
@@ -364,6 +365,35 @@ class TestProjectManagerAndFiles(unittest.TestCase):
         self.assertIn("Tarde", df_legado.columns)
         self.assertIn("Noite", df_legado.columns)
         self.assertEqual(len(df_legado), 2)
+
+
+
+class TestUpdaterChannels(unittest.TestCase):
+    """Testes do sistema de atualização com suporte a Canais Estável e Dev."""
+
+    def test_comparar_versoes_semanticas(self):
+        self.assertEqual(comparar_versoes("1.0.1", "1.0.0"), 1)
+        self.assertEqual(comparar_versoes("v1.0.0", "1.0.0"), 0)
+        self.assertEqual(comparar_versoes("1.0.0", "1.0.0"), 0)
+        self.assertEqual(comparar_versoes("1.0.0", "1.2.0"), -1)
+        self.assertEqual(comparar_versoes("2.0.0", "1.9.9"), 1)
+
+    def test_verificar_canal_stable_estrutura(self):
+        res = verificar_atualizacao_github(canal="stable", timeout=8)
+        self.assertIn("sucesso", res)
+        if res["sucesso"]:
+            self.assertEqual(res["canal"], "stable")
+            self.assertIn("tem_atualizacao", res)
+            self.assertIn("versao_local", res)
+            self.assertIn("versao_remota", res)
+
+    def test_verificar_canal_dev_estrutura(self):
+        res = verificar_atualizacao_github(canal="dev", timeout=8)
+        self.assertIn("sucesso", res)
+        if res["sucesso"]:
+            self.assertEqual(res["canal"], "dev")
+            self.assertIn("tem_atualizacao", res)
+            self.assertIn("sha_remoto", res)
 
 
 if __name__ == "__main__":
