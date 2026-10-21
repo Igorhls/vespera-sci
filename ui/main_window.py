@@ -397,7 +397,7 @@ class VesperaMainWindow(QMainWindow):
 
         self.btn_salvar_como = QPushButton("Salvar Como...")
         self.btn_salvar_como.setIcon(get_icon("save", size=15))
-        self.btn_salvar_como.setToolTip("Salvar Cópia do Projeto em Arquivo .vespera (Ctrl+Shift+S)")
+        self.btn_salvar_como.setToolTip("Salvar Cópia do Projeto em Arquivo .json (Ctrl+Shift+S)")
         self.btn_salvar_como.setCursor(Qt.PointingHandCursor)
         self.btn_salvar_como.clicked.connect(self._salvar_projeto_como)
         proj_layout.addWidget(self.btn_salvar_como)
@@ -1092,17 +1092,17 @@ class VesperaMainWindow(QMainWindow):
             self._salvar_projeto_como()
 
     def _salvar_projeto_como(self):
-        """Salva o projeto em um novo arquivo individual (.vespera ou .json)."""
+        """Salva o projeto em um novo arquivo individual (.json por padrão, ou .vespera)."""
         payload = self._construir_payload_atual()
         nome_sugestao = payload["nome_projeto"].replace(" ", "_").lower()
-        if not nome_sugestao.endswith(".vespera"):
-            nome_sugestao += ".vespera"
+        if not nome_sugestao.endswith(".json") and not nome_sugestao.endswith(".vespera"):
+            nome_sugestao += ".json"
 
         caminho, _ = QFileDialog.getSaveFileName(
             self,
             "Salvar Projeto Como",
             nome_sugestao,
-            "Projeto Vespera Sci (*.vespera);;Arquivo JSON (*.json)",
+            "Projeto Vespera Sci (*.json);;Arquivo Vespera (*.vespera);;Todos os Arquivos (*.*)",
         )
         if caminho:
             sucesso = self.project_manager.salvar_arquivo_projeto(caminho, payload)
@@ -1122,12 +1122,12 @@ class VesperaMainWindow(QMainWindow):
                 QMessageBox.critical(self, "Erro ao Salvar", f"Não foi possível salvar o arquivo {caminho}")
 
     def _abrir_arquivo_projeto(self):
-        """Abre diálogo de seleção para arquivos de projeto (.vespera / .json)."""
+        """Abre diálogo de seleção para arquivos de projeto (.json / .vespera)."""
         caminho, _ = QFileDialog.getOpenFileName(
             self,
-            "Abrir Arquivo de Projeto (.vespera / .json)",
+            "Abrir Arquivo de Projeto (.json / .vespera)",
             "",
-            "Projetos Vespera Sci (*.vespera *.json);;Todos os Arquivos (*.*)",
+            "Projetos Vespera Sci (*.json *.vespera);;Todos os Arquivos (*.*)",
         )
         if caminho:
             self._abrir_caminho_projeto(caminho)

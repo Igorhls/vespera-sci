@@ -277,6 +277,35 @@ class TestExcelExporter(unittest.TestCase):
 class TestProjectManagerAndFiles(unittest.TestCase):
     """Testes de persistência de arquivos .vespera e retrocompatibilidade."""
 
+    def test_salvar_e_carregar_arquivo_json_padrao(self):
+        import tempfile
+        df_teste = pd.DataFrame({
+            "Pontos": ["P1", "P2"],
+            "Sensor X": [10.5, 11.2],
+        })
+        payload = ProjectManager.construir_payload(
+            nome_projeto="Projeto JSON Padrao",
+            tipo_grafico="linhas",
+            df=df_teste,
+            titulo_dia="Dia 1",
+            titulo_grafico="",
+            min_y=0.0,
+            max_y=20.0,
+            cfg={},
+        )
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+            tmp_path = tmp.name
+
+        try:
+            sucesso = ProjectManager.salvar_arquivo_projeto(tmp_path, payload)
+            self.assertTrue(sucesso)
+            carregado = ProjectManager.carregar_arquivo_projeto(tmp_path)
+            self.assertEqual(carregado["nome_projeto"], "Projeto JSON Padrao")
+            self.assertEqual(carregado["colunas"], ["Pontos", "Sensor X"])
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+
     def test_salvar_e_carregar_arquivo_vespera_dinamico(self):
         import tempfile
         df_teste = pd.DataFrame({
