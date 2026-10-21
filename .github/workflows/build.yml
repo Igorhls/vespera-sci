@@ -14,6 +14,10 @@ on:
         type: boolean
         default: false
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -82,63 +86,6 @@ jobs:
           name: VesperaSci-Windows-x64
           path: dist/VesperaSci-Windows-x64.zip
 
-  build-macos-intel:
-    name: Compilar macOS Intel (.dmg / Ventura 13+)
-    needs: test
-    runs-on: macos-13
-    steps:
-      - name: Obter Código
-        uses: actions/checkout@v4
-
-      - name: Configurar Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: "pip"
-
-      - name: Instalar Dependências
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller pillow
-
-      - name: Gerar Ícone ICNS do macOS
-        run: |
-          mkdir -p AppIcon.iconset
-          sips -z 16 16     assets/app_icon.png --out AppIcon.iconset/icon_16x16.png
-          sips -z 32 32     assets/app_icon.png --out AppIcon.iconset/icon_16x16@2x.png
-          sips -z 32 32     assets/app_icon.png --out AppIcon.iconset/icon_32x32.png
-          sips -z 64 64     assets/app_icon.png --out AppIcon.iconset/icon_32x32@2x.png
-          sips -z 128 128   assets/app_icon.png --out AppIcon.iconset/icon_128x128.png
-          sips -z 256 256   assets/app_icon.png --out AppIcon.iconset/icon_128x128@2x.png
-          sips -z 256 256   assets/app_icon.png --out AppIcon.iconset/icon_256x256.png
-          sips -z 512 512   assets/app_icon.png --out AppIcon.iconset/icon_256x256@2x.png
-          sips -z 512 512   assets/app_icon.png --out AppIcon.iconset/icon_512x512.png
-          iconutil -c icns AppIcon.iconset -o assets/app_icon.icns
-
-      - name: Compilar Bundle .app
-        run: |
-          pyinstaller --noconfirm --onedir --windowed \
-            --name "VesperaSci" \
-            --icon "assets/app_icon.icns" \
-            --add-data "assets:assets" \
-            --add-data "config:config" \
-            --osx-bundle-identifier "com.vesperasci.app" \
-            main.py
-
-      - name: Criar Imagem de Disco (.dmg)
-        run: |
-          mkdir -p dmg_root
-          cp -r dist/VesperaSci.app dmg_root/
-          ln -s /Applications dmg_root/Applications
-          hdiutil create -volname "Vespera Sci" -srcfolder dmg_root -ov -format UDZO dist/VesperaSci-macOS-Intel-x86_64.dmg
-
-      - name: Armazenar Artefato macOS Intel
-        uses: actions/upload-artifact@v4
-        with:
-          name: VesperaSci-macOS-Intel-x86_64
-          path: dist/VesperaSci-macOS-Intel-x86_64.dmg
-
   build-macos-arm:
     name: Compilar macOS Apple Silicon (.dmg / M1/M2/M3/M4)
     needs: test
@@ -199,7 +146,7 @@ jobs:
   publish-release:
     name: Publicar Release Oficial no GitHub
     if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && inputs.publish_release == true)
-    needs: [build-windows, build-macos-intel, build-macos-arm]
+    needs: [build-windows, build-macos-arm]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -225,7 +172,6 @@ jobs:
             ### Instaladores Disponíveis para Download:
             * **Windows (64-bit)**: [`VesperaSci-Windows-x64.zip`](https://github.com/${{ github.repository }}/releases/download/v1.0.0/VesperaSci-Windows-x64.zip) (Extraia o arquivo .zip e execute o `VesperaSci.exe`)
             * **macOS Apple Silicon (M1/M2/M3/M4)**: [`VesperaSci-macOS-AppleSilicon-arm64.dmg`](https://github.com/${{ github.repository }}/releases/download/v1.0.0/VesperaSci-macOS-AppleSilicon-arm64.dmg) (macOS 13 Ventura ou superior)
-            * **macOS Intel (x86_64)**: [`VesperaSci-macOS-Intel-x86_64.dmg`](https://github.com/${{ github.repository }}/releases/download/v1.0.0/VesperaSci-macOS-Intel-x86_64.dmg) (macOS 13 Ventura ou superior)
 
             ---
             ### Instruções de Instalação no macOS:
@@ -243,5 +189,4 @@ jobs:
             - **Exportação Multiformato**: PNG em alta resolução (300 DPI), Vetor PDF, Vetor SVG e planilhas nativas do Microsoft Excel (.xlsx).
           files: |
             release_assets/VesperaSci-Windows-x64/*
-            release_assets/VesperaSci-macOS-Intel-x86_64/*
             release_assets/VesperaSci-macOS-AppleSilicon-arm64/*
