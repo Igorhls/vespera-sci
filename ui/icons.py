@@ -9,7 +9,43 @@ from PySide6.QtGui import QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 
 SVG_ICONS = {
-    "app-icon": """<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 9 9"/><path d="m14 8-4 8"/><path d="M9 13h6"/></svg>""",
+    "app-icon": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="24" height="24">
+  <defs>
+    <linearGradient id="app_bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#090d16"/>
+      <stop offset="50%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e1338"/>
+    </linearGradient>
+    <linearGradient id="app_wave" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#6366f1" stop-opacity="0.3"/>
+      <stop offset="35%" stop-color="#8b5cf6" stop-opacity="0.75"/>
+      <stop offset="70%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+    <linearGradient id="app_area" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.3"/>
+      <stop offset="60%" stop-color="#3b82f6" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.0"/>
+    </linearGradient>
+    <filter id="app_glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="7" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+  <rect width="256" height="256" rx="58" fill="url(#app_bg)"/>
+  <rect width="254" height="254" x="1" y="1" rx="57" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1.5"/>
+  <g stroke="rgba(255,255,255,0.06)" stroke-width="1" stroke-dasharray="3 3">
+    <line x1="48" y1="64" x2="208" y2="64"/><line x1="48" y1="104" x2="208" y2="104"/><line x1="48" y1="144" x2="208" y2="144"/><line x1="48" y1="184" x2="208" y2="184"/>
+    <line x1="48" y1="64" x2="48" y2="184"/><line x1="88" y1="64" x2="88" y2="184"/><line x1="128" y1="64" x2="128" y2="184"/><line x1="168" y1="64" x2="168" y2="184"/><line x1="208" y1="64" x2="208" y2="184"/>
+  </g>
+  <path d="M48 64 V184 H208" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M48 160 C80 160, 100 148, 128 128 C156 108, 175 74, 204 68 V184 H48 Z" fill="url(#app_area)"/>
+  <path d="M48 160 C75 160, 95 150, 120 134" fill="none" stroke="#8b5cf6" stroke-width="5" stroke-dasharray="3 4" stroke-linecap="round" opacity="0.7"/>
+  <path d="M116 137 C138 122, 165 76, 204 68" fill="none" stroke="url(#app_wave)" stroke-width="6" stroke-linecap="round" filter="url(#app_glow)"/>
+  <circle cx="120" cy="134" r="5" fill="#8b5cf6"/>
+  <circle cx="204" cy="68" r="8" fill="#ffffff" filter="url(#app_glow)"/>
+  <circle cx="204" cy="68" r="4.5" fill="#06b6d4"/>
+</svg>""",
     "chart-line": """<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>""",
     "chart-bar": """<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>""",
     "chart-scatter": """<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><circle cx="7.5" cy="14.5" r="1.5" fill="{color}"/><circle cx="11.5" cy="10.5" r="1.5" fill="{color}"/><circle cx="15.5" cy="12.5" r="1.5" fill="{color}"/><circle cx="18.5" cy="6.5" r="1.5" fill="{color}"/><line x1="6" y1="16" x2="20" y2="5" stroke="{color}" stroke-width="1.8" stroke-dasharray="2 2"/></svg>""",
@@ -48,7 +84,10 @@ def get_icon(name: str, color: str = "#3b82f6", size: int = 20) -> QIcon:
     if not svg_template:
         return QIcon()
 
-    svg_content = svg_template.format(color=color)
+    if "{color}" in svg_template:
+        svg_content = svg_template.format(color=color)
+    else:
+        svg_content = svg_template
     byte_arr = QByteArray(svg_content.encode("utf-8"))
 
     renderer = QSvgRenderer(byte_arr)
