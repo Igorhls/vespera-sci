@@ -1,4 +1,4 @@
-name: Multiplatform Build & Release
+name: Compilacao Multiplataforma & Releases
 
 on:
   push:
@@ -7,55 +7,61 @@ on:
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: "Publicar Release no GitHub?"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
 jobs:
   test:
-    name: Test Suite (pytest / unittest)
+    name: Suíte de Testes (unittest / pytest)
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
+      - name: Obter Código
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Configurar Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
 
-      - name: Install Dependencies
+      - name: Instalar Dependências
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest
 
-      - name: Run Tests
+      - name: Executar Testes
         run: |
           python -m unittest tests/test_all.py
 
   build-windows:
-    name: Build Windows Standalone (.exe)
+    name: Compilar Executável Windows (x64)
     needs: test
     runs-on: windows-latest
     steps:
-      - name: Checkout Code
+      - name: Obter Código
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Configurar Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
 
-      - name: Install Dependencies
+      - name: Instalar Dependências
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Build with PyInstaller
+      - name: Compilar com PyInstaller
         shell: pwsh
         run: |
           pyinstaller --noconfirm --onedir --windowed `
@@ -65,38 +71,38 @@ jobs:
             --add-data "config;config" `
             main.py
 
-      - name: Compress Windows Package
+      - name: Compactar Pacote Windows
         shell: pwsh
         run: |
           Compress-Archive -Path dist/VesperaSci -DestinationPath dist/VesperaSci-Windows-x64.zip
 
-      - name: Upload Windows Artifact
+      - name: Armazenar Artefato Windows
         uses: actions/upload-artifact@v4
         with:
           name: VesperaSci-Windows-x64
           path: dist/VesperaSci-Windows-x64.zip
 
   build-macos-intel:
-    name: Build macOS Intel (.dmg / macOS 13 Ventura)
+    name: Compilar macOS Intel (.dmg / Ventura 13+)
     needs: test
     runs-on: macos-13
     steps:
-      - name: Checkout Code
+      - name: Obter Código
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Configurar Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
 
-      - name: Install Dependencies
+      - name: Instalar Dependências
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller pillow
 
-      - name: Convert App Icon to ICNS
+      - name: Gerar Ícone ICNS do macOS
         run: |
           mkdir -p AppIcon.iconset
           sips -z 16 16     assets/app_icon.png --out AppIcon.iconset/icon_16x16.png
@@ -110,7 +116,7 @@ jobs:
           sips -z 512 512   assets/app_icon.png --out AppIcon.iconset/icon_512x512.png
           iconutil -c icns AppIcon.iconset -o assets/app_icon.icns
 
-      - name: Build macOS App Bundle
+      - name: Compilar Bundle .app
         run: |
           pyinstaller --noconfirm --onedir --windowed \
             --name "VesperaSci" \
@@ -120,40 +126,40 @@ jobs:
             --osx-bundle-identifier "com.vesperasci.app" \
             main.py
 
-      - name: Create DMG Disk Image
+      - name: Criar Imagem de Disco (.dmg)
         run: |
           mkdir -p dmg_root
           cp -r dist/VesperaSci.app dmg_root/
           ln -s /Applications dmg_root/Applications
           hdiutil create -volname "Vespera Sci" -srcfolder dmg_root -ov -format UDZO dist/VesperaSci-macOS-Intel-x86_64.dmg
 
-      - name: Upload macOS Intel DMG
+      - name: Armazenar Artefato macOS Intel
         uses: actions/upload-artifact@v4
         with:
           name: VesperaSci-macOS-Intel-x86_64
           path: dist/VesperaSci-macOS-Intel-x86_64.dmg
 
   build-macos-arm:
-    name: Build macOS Apple Silicon (.dmg / M1/M2/M3/M4 Ventura+)
+    name: Compilar macOS Apple Silicon (.dmg / M1/M2/M3/M4)
     needs: test
     runs-on: macos-14
     steps:
-      - name: Checkout Code
+      - name: Obter Código
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Configurar Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
 
-      - name: Install Dependencies
+      - name: Instalar Dependências
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller pillow
 
-      - name: Convert App Icon to ICNS
+      - name: Gerar Ícone ICNS do macOS
         run: |
           mkdir -p AppIcon.iconset
           sips -z 16 16     assets/app_icon.png --out AppIcon.iconset/icon_16x16.png
@@ -167,7 +173,7 @@ jobs:
           sips -z 512 512   assets/app_icon.png --out AppIcon.iconset/icon_512x512.png
           iconutil -c icns AppIcon.iconset -o assets/app_icon.icns
 
-      - name: Build macOS App Bundle
+      - name: Compilar Bundle .app
         run: |
           pyinstaller --noconfirm --onedir --windowed \
             --name "VesperaSci" \
@@ -177,64 +183,64 @@ jobs:
             --osx-bundle-identifier "com.vesperasci.app" \
             main.py
 
-      - name: Create DMG Disk Image
+      - name: Criar Imagem de Disco (.dmg)
         run: |
           mkdir -p dmg_root
           cp -r dist/VesperaSci.app dmg_root/
           ln -s /Applications dmg_root/Applications
           hdiutil create -volname "Vespera Sci" -srcfolder dmg_root -ov -format UDZO dist/VesperaSci-macOS-AppleSilicon-arm64.dmg
 
-      - name: Upload macOS Apple Silicon DMG
+      - name: Armazenar Artefato macOS Apple Silicon
         uses: actions/upload-artifact@v4
         with:
           name: VesperaSci-macOS-AppleSilicon-arm64
           path: dist/VesperaSci-macOS-AppleSilicon-arm64.dmg
 
   publish-release:
-    name: Publish Official GitHub Release
-    if: github.event_name != 'pull_request'
+    name: Publicar Release Oficial no GitHub
+    if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && inputs.publish_release == true)
     needs: [build-windows, build-macos-intel, build-macos-arm]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Download all compiled artifacts
+      - name: Baixar todos os artefatos compilados
         uses: actions/download-artifact@v4
         with:
           path: release_assets
 
-      - name: Publish to GitHub Releases
+      - name: Publicar Release no GitHub
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v1.0.0"
-          name: "Vespera Sci Alpha — v1.0.0"
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v1.0.0' }}
+          name: "Vespera Sci v1.0.0 (Beta)"
           draft: false
           prerelease: false
           make_latest: true
           body: |
-            ## Vespera Sci Alpha — Scientific Plotting & Data Studio
+            ## Vespera Sci v1.0.0 (Beta) — Estúdio Científico de Dados e Gráficos
 
-            Bem-vindo ao release oficial do **Vespera Sci Desktop**, o estúdio de gráficos científicos nos padrões OriginLab Pro / ABNT.
+            Primeira versão pública do **Vespera Sci Desktop**, desenvolvida para geração de gráficos científicos e relatórios analíticos nos padrões acadêmicos internacionais e ABNT.
 
-            ### 📦 Instaladores Disponíveis para Download:
-            * **Windows (64-bit)**: [`VesperaSci-Windows-x64.zip`](https://github.com/${{ github.repository }}/releases/download/v1.0.0/VesperaSci-Windows-x64.zip) *(Extraia o arquivo .zip e execute o `VesperaSci.exe`)*
-            * **macOS Apple Silicon (M1/M2/M3/M4)**: [`VesperaSci-macOS-AppleSilicon-arm64.dmg`](https://github.com/${{ github.repository }}/releases/download/v1.0.0/VesperaSci-macOS-AppleSilicon-arm64.dmg) *(macOS 13 Ventura ou superior)*
-            * **macOS Intel (x86_64)**: [`VesperaSci-macOS-Intel-x86_64.dmg`](https://github.com/${{ github.repository }}/releases/download/v1.0.0/VesperaSci-macOS-Intel-x86_64.dmg) *(macOS 13 Ventura ou superior)*
+            ### Instaladores Disponíveis para Download:
+            * **Windows (64-bit)**: [`VesperaSci-Windows-x64.zip`](https://github.com/${{ github.repository }}/releases/download/v1.0.0/VesperaSci-Windows-x64.zip) (Extraia o arquivo .zip e execute o `VesperaSci.exe`)
+            * **macOS Apple Silicon (M1/M2/M3/M4)**: [`VesperaSci-macOS-AppleSilicon-arm64.dmg`](https://github.com/${{ github.repository }}/releases/download/v1.0.0/VesperaSci-macOS-AppleSilicon-arm64.dmg) (macOS 13 Ventura ou superior)
+            * **macOS Intel (x86_64)**: [`VesperaSci-macOS-Intel-x86_64.dmg`](https://github.com/${{ github.repository }}/releases/download/v1.0.0/VesperaSci-macOS-Intel-x86_64.dmg) (macOS 13 Ventura ou superior)
 
             ---
-            ### 🍎 Como Usar no Mac:
+            ### Instruções de Instalação no macOS:
             1. Abra o arquivo `.dmg` baixado e arraste o **Vespera Sci** para a pasta **Applications**.
-            2. Na primeira abertura, clique com o **botão direito > Abrir** (ou acesse *Ajustes do Sistema > Privacidade e Segurança > Abrir Mesmo Assim*).
+            2. Na primeira inicialização, clique com o **botão direito > Abrir** (ou acesse *Ajustes do Sistema > Privacidade e Segurança > Abrir Mesmo Assim*).
 
             ---
-            ### ✨ Principais Recursos:
-            - **Gráficos de Linhas e Pontos**: Séries temporais térmicas completas (Manhã, Tarde, Noite).
+            ### Destaques desta Versão:
+            - **Gráficos de Linhas e Séries**: Séries temporais térmicas completas (Manhã, Tarde, Noite).
             - **Gráficos de Barras com Desvio**: Médias e desvios padrão amostrais com padrões OriginLab hachurados.
-            - **Dispersão & Regressão Linear**: Ajuste de reta de regressão com cálculo em tempo real do $R^2$, Pearson e erro padrão.
-            - **Boxplot & Distribuição Térmica**: Quartis Q1/Q3, Mediana, Whiskers ($1{,}5 \times \text{IQR}$), médias e detecção de outliers.
-            - **Colagem Direta do Excel**: Atalho `Ctrl+V` diretamente sobre as células do grid.
-            - **Histórico Completo**: Desfazer e Refazer (`Ctrl+Z` / `Ctrl+Y`).
-            - **Exportação Multiformato**: PNG (300 DPI), Vetor PDF, Vetor SVG e planilhas nativas do Microsoft Excel (.xlsx).
+            - **Dispersão e Regressão Linear**: Ajuste de reta com cálculo do coeficiente de determinação (R²), correlação de Pearson e erro padrão.
+            - **Boxplot e Distribuição Térmica**: Quartis Q1/Q3, Mediana, Whiskers (1,5 × IQR), médias e detecção de outliers.
+            - **Colagem Direta**: Suporte a atalho Ctrl+V diretamente sobre o grid de células.
+            - **Histórico Completo**: Desfazer e Refazer (Ctrl+Z / Ctrl+Y) com retenção de até 60 estados.
+            - **Exportação Multiformato**: PNG em alta resolução (300 DPI), Vetor PDF, Vetor SVG e planilhas nativas do Microsoft Excel (.xlsx).
           files: |
             release_assets/VesperaSci-Windows-x64/*
             release_assets/VesperaSci-macOS-Intel-x86_64/*

@@ -1,7 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-title Vespera Sci Alpha
+title Vespera Sci
 
 set "PY="
 where py >nul 2>&1

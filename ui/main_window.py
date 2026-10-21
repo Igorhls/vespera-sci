@@ -54,7 +54,7 @@ class VesperaMainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Vespera Sci Alpha — Scientific Plotting & Data Studio")
+        self.setWindowTitle("Vespera Sci v1.0.0 (Beta) — Estúdio Científico de Dados e Gráficos")
         self.resize(1760, 920)
         self.setMinimumSize(1280, 720)
 
@@ -70,7 +70,7 @@ class VesperaMainWindow(QMainWindow):
         self.nome_projeto_atual = "Dia 14 de agosto"
         self.cfg_atual = DEFAULT_CONFIG.copy()
         self._updating_project_combo = False
-        self.settings = QSettings("VesperaSci", "VesperaSciAlpha")
+        self.settings = QSettings("VesperaSci", "VesperaSci")
         self.tema_atual = str(self.settings.value("theme", "light"))
         saved_geom = self.settings.value("geometry")
         if saved_geom:
@@ -200,7 +200,7 @@ class VesperaMainWindow(QMainWindow):
         act_update.triggered.connect(self._acionar_verificacao_atualizacao)
         menu_ajuda.addAction(act_update)
 
-        act_sobre = QAction("Sobre o Vespera Sci Alpha", self)
+        act_sobre = QAction("Sobre o Vespera Sci", self)
         act_sobre.setIcon(get_icon("app-icon", size=16))
         act_sobre.triggered.connect(self._mostrar_sobre)
         menu_ajuda.addAction(act_sobre)
@@ -237,7 +237,7 @@ class VesperaMainWindow(QMainWindow):
 
         lbl_brand = QLabel(
             "<b>Vespera Sci</b> <span style='background-color: #3b82f6; color: white; "
-            "font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px;'>ALPHA</span>"
+            "font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px;'>BETA</span>"
         )
         lbl_brand.setStyleSheet("font-size: 15px;")
         bw_layout.addWidget(lbl_brand)
@@ -1215,9 +1215,9 @@ class VesperaMainWindow(QMainWindow):
     def _mostrar_sobre(self):
         QMessageBox.about(
             self,
-            "Sobre o Vespera Sci Alpha",
-            "<h3>🌌 Vespera Sci — ALPHA Edition</h3>"
-            "<p><b>Scientific Plotting & Data Studio</b></p>"
+            "Sobre o Vespera Sci",
+            "<h3>Vespera Sci — Versão 1.0.0 (Beta)</h3>"
+            "<p><b>Estúdio Científico de Análise de Dados e Gráficos</b></p>"
             "<p>Plataforma desktop científica para análise de dados experimentais, "
             "estatística descritiva e produção de figuras no padrão OriginLab Pro / ABNT.</p>"
             "<p>Repositório: <a href='https://github.com/Igorhls/vespera-sci'>"

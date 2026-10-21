@@ -1,7 +1,8 @@
 {
-  "version": "1.9.0",
-  "release_date": "2026-10-17",
+  "version": "1.0.0",
+  "status": "Beta",
+  "release_date": "2026-10-21",
   "repo": "Igorhls/vespera-sci",
   "branch": "main",
-  "notes": "Vespera Sci Alpha — Novo Modo de Gráfico: Dispersão (Regressão Linear & R²), réplica idêntica de BOSQUE URA x Ta (R² = 0,334), cálculo de Pearson r, erro padrão Se, intervalo de confiança e interpretação bioclimática científica"
+  "notes": "Vespera Sci v1.0.0 (Beta) — Gráficos de Linhas, Barras TA, Dispersão com R², Boxplot e Distribuição Térmica, exportação SVG vetorial, colagem direta via Ctrl+V e testes automatizados."
 }

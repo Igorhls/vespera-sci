@@ -1,9 +1,9 @@
 @echo off
 setlocal
-title Instalador Online - Vespera Sci Alpha
+title Instalador Online - Vespera Sci
 
 echo ======================================================================
-echo   VESPERA SCI ALPHA - INSTALADOR OFICIAL
+echo   VESPERA SCI - INSTALADOR OFICIAL
 echo   Repositorio: https://github.com/Igorhls/vespera-sci
 echo ======================================================================
 echo.
@@ -64,8 +64,8 @@ echo Aguarde, configurando bibliotecas (PySide6, Matplotlib, Pandas, NumPy)...
 %PY% -m pip install -r "%DESTINO%\requirements.txt"
 
 echo.
-echo Criando atalho oficial Vespera Sci Alpha na Area de Trabalho...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $d = [Environment]::GetFolderPath('Desktop'); $s = $ws.CreateShortcut((Join-Path $d 'Vespera Sci Alpha.lnk')); $s.TargetPath = (Join-Path '%DESTINO%' 'Iniciar_Vespera_Sci.bat'); $s.WorkingDirectory = '%DESTINO%'; $s.IconLocation = (Join-Path '%DESTINO%' 'assets\app_icon.ico'); $s.WindowStyle = 7; $s.Description = 'Vespera Sci Alpha - Scientific Studio'; $s.Save()"
+echo Criando atalho oficial Vespera Sci na Area de Trabalho...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $d = [Environment]::GetFolderPath('Desktop'); $s = $ws.CreateShortcut((Join-Path $d 'Vespera Sci.lnk')); $s.TargetPath = (Join-Path '%DESTINO%' 'Iniciar_Vespera_Sci.bat'); $s.WorkingDirectory = '%DESTINO%'; $s.IconLocation = (Join-Path '%DESTINO%' 'assets\app_icon.ico'); $s.WindowStyle = 7; $s.Description = 'Vespera Sci - Scientific Studio'; $s.Save()"
 
 rd /s /q "%TEMP_DIR%" >nul 2>&1
 

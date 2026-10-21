@@ -192,7 +192,7 @@ DEFAULT_CONFIG = {
     "negrito_valores_barras": True,
     "largura_grupo_barras": 0.68,
     "espessura_linha": 1.2,
-    "modo_estilo_linhas": "Opção 1: Linha + Símbolo (Line + Symbol)",
+    "modo_estilo_linhas": "Opção 1: Linha + Símbolo",
     "tamanho_marcador": 6.0,
     "rotulos_descritivos_legenda": True,
     "traco_manha": "-",
@@ -259,8 +259,8 @@ DEFAULT_CONFIG = {
 }
 
 MODOS_ESTILO_LINHAS = [
-    "Opção 1: Linha + Símbolo (Line + Symbol)",
-    "Opção 2: Estilos de Traçado (Dash Type)",
+    "Opção 1: Linha + Símbolo",
+    "Opção 2: Estilos de Traçado Distintos",
     "Linhas Contínuas Padrão",
     "Personalizado (Avançado)",
 ]

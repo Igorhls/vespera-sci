@@ -15,7 +15,7 @@ def main():
     # Desacopla o ícone da barra de tarefas do executável genérico do Python no Windows
     try:
         import ctypes
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("vesperasci.desktop.app.1.9")
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("vesperasci.desktop.app.1.0")
     except Exception:
         pass
 
