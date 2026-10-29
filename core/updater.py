@@ -114,16 +114,29 @@ def ler_versao_local() -> dict:
 
 
 def comparar_versoes(v_remota: str, v_local: str) -> int:
-    """Retorna 1 se v_remota > v_local, 0 se iguais, -1 se menor."""
+    """
+    Retorna 1 se v_remota > v_local, 0 se iguais, -1 se menor.
+    Segue a precedência do SemVer para pré-lançamentos do canal Dev:
+    1.0.0 < 1.1.0-dev.1 < 1.1.0-dev.2 < 1.1.0.
+    """
     def parse(v):
         limpo = str(v).lstrip("vV").strip()
-        partes = []
-        for p in limpo.split("."):
+        nucleo, _, pre = limpo.partition("-")
+        numeros = []
+        for p in nucleo.split("."):
             try:
-                partes.append(int(p))
+                numeros.append(int(p))
             except ValueError:
-                partes.append(0)
-        return tuple(partes)
+                numeros.append(0)
+        while len(numeros) < 3:
+            numeros.append(0)
+        # Versão final vem depois de qualquer pré-lançamento com o mesmo núcleo
+        if not pre:
+            return (tuple(numeros), 1, ())
+        identificadores = tuple(
+            (0, int(i), "") if i.isdigit() else (1, 0, i) for i in pre.split(".")
+        )
+        return (tuple(numeros), 0, identificadores)
 
     pr, pl = parse(v_remota), parse(v_local)
     if pr > pl:
@@ -282,7 +295,9 @@ def verificar_atualizacao_github(canal: str = "stable", timeout: int = 10) -> di
     data_remota = remoto_ver_info.get("release_date", data_commit)
 
     cmp_ver = comparar_versoes(versao_remota, versao_local)
-    sha_diferente = bool(ultimo_sha and sha_local and ultimo_sha != sha_local)
+    # Sem SHA local (ex.: instalação pelo Instalar_Online.bat) não há como provar que está em dia:
+    # oferecer a sincronização grava o .last_update_sha e resolve nas próximas verificações.
+    sha_diferente = bool(ultimo_sha and ultimo_sha != sha_local)
     tem_atualizacao = (cmp_ver > 0) or sha_diferente
 
     return {

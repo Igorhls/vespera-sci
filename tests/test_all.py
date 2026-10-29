@@ -395,6 +395,24 @@ class TestUpdaterChannels(unittest.TestCase):
         self.assertEqual(comparar_versoes("1.0.0", "1.2.0"), -1)
         self.assertEqual(comparar_versoes("2.0.0", "1.9.9"), 1)
 
+    def test_comparar_versoes_pre_lancamento_dev(self):
+        self.assertEqual(comparar_versoes("1.1.0-dev.1", "1.0.0"), 1)
+        self.assertEqual(comparar_versoes("1.1.0-dev.2", "1.1.0-dev.1"), 1)
+        self.assertEqual(comparar_versoes("1.1.0-dev.10", "1.1.0-dev.9"), 1)
+        # Promover a versão para o estável é uma atualização para quem está no Dev
+        self.assertEqual(comparar_versoes("1.1.0", "1.1.0-dev.3"), 1)
+        self.assertEqual(comparar_versoes("v1.1.0-dev.1", "1.1.0-dev.1"), 0)
+
+    def test_canal_dev_sem_sha_local_oferece_sincronizacao(self):
+        respostas = [
+            self._resposta(200, {"version": "1.0.0"}),
+            self._resposta(200, {"sha": "b" * 40, "commit": {"message": "fix", "committer": {"date": "2026-10-28"}}}),
+        ]
+        with mock.patch("core.updater.ler_versao_local", return_value={"version": "1.0.0", "local_sha": ""}), \
+                mock.patch("core.updater.requests.get", side_effect=respostas):
+            res = verificar_atualizacao_github(canal="dev")
+        self.assertTrue(res["tem_atualizacao"])
+
     @staticmethod
     def _resposta(status, payload):
         r = mock.Mock()

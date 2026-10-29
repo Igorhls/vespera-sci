@@ -333,18 +333,23 @@ class UpdateDialog(QDialog):
             msg = res.get("mensagem_commit", "")
             data_com = res.get("data_remota", "")
 
+            notas_dev = res.get("notas_versao", "")
+
             self.lbl_metadados.setText(
-                f"<b>Commit Local:</b> <code>{sha_l}</code> &nbsp;|&nbsp; "
-                f"<b>Último Commit no GitHub (main):</b> <code>{sha_r}</code> {f'({data_com})' if data_com else ''}"
+                f"<b>Versão Instalada:</b> v{v_local} (<code>{sha_l}</code>) &nbsp;|&nbsp; "
+                f"<b>Versão na main:</b> v{v_remota} (<code>{sha_r}</code>) {f'({data_com})' if data_com else ''}"
             )
             self.txt_notas.setPlainText(
                 f"Mensagem do Commit:\n{msg}\n\n"
-                f"Repositório: https://github.com/Igorhls/vespera-sci/commits/main"
+                + (f"Notas da versão v{v_remota}:\n{notas_dev}\n\n" if notas_dev else "")
+                + "Repositório: https://github.com/Igorhls/vespera-sci/commits/main"
             )
 
             if tem_update:
                 self.lbl_status_icon.setPixmap(get_icon("download", color="#2563eb", size=24).pixmap(24, 24))
-                self.lbl_status_titulo.setText("<b>Novos commits de desenvolvimento disponíveis na branch main.</b>")
+                self.lbl_status_titulo.setText(
+                    f"<b>Nova versão de desenvolvimento disponível: v{v_remota} (branch main).</b>"
+                )
                 self.lbl_status_desc.setText(
                     "Você está no Canal de Desenvolvimento (Dev). Clique abaixo para sincronizar com as alterações mais recentes."
                 )
