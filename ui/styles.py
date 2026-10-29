@@ -247,6 +247,33 @@ def build_qss(theme: dict) -> str:
         font-weight: 700;
     }}
 
+    /* Botões somente com ícone (barra superior e ferramentas da tabela) */
+    QPushButton#btnIcon {{
+        padding: 6px;
+        min-width: 22px;
+        min-height: 20px;
+    }}
+    QPushButton#btnIcon:checked {{
+        background-color: {theme['bg_hover']};
+        border: 1px solid {theme['accent']};
+    }}
+    QPushButton#btnIcon:disabled {{
+        background-color: transparent;
+        border-color: {theme['border']};
+    }}
+    QPushButton#btnMenu {{
+        padding-right: 26px;
+    }}
+    QPushButton#btnMenu::menu-indicator {{
+        subcontrol-origin: padding;
+        subcontrol-position: center right;
+        right: 8px;
+    }}
+    QFrame#separadorBarra {{
+        background-color: {theme['border']};
+        border: none;
+    }}
+
     /* Inputs e Controles */
     QLineEdit, QComboBox, QDoubleSpinBox, QSpinBox, QPlainTextEdit, QTextBrowser, QTextEdit {{
         background-color: {theme['bg_input']};

@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -23,6 +24,54 @@ from PySide6.QtWidgets import (
 from ui.icons import get_icon
 
 logger = logging.getLogger(__name__)
+
+# Tamanho físico da figura (polegadas). É o tamanho exportado em PNG/TIFF/PDF/SVG,
+# independentemente do tamanho da janela.
+LARGURA_FIGURA_POL = 8.5
+ALTURA_FIGURA_POL = 5.3
+
+
+class CanvasProporcional(FigureCanvasQTAgg):
+    """
+    Canvas cujo tamanho em polegadas é sempre LARGURA x ALTURA_FIGURA_POL.
+    Ao redimensionar, só o DPI de tela muda: a prévia funciona como um zoom
+    da figura exportada (mesmas proporções de texto, legenda e margens).
+    """
+
+    def resizeEvent(self, event):
+        if self.figure is not None and event.size().width() > 0:
+            try:
+                razao = self.device_pixel_ratio or 1.0
+                dpi = max(20.0, event.size().width() * razao / LARGURA_FIGURA_POL)
+                self.figure._original_dpi = dpi / razao
+                self.figure._set_dpi(dpi, forward=False)
+            except AttributeError:
+                logger.debug("API de DPI do Matplotlib indisponível; usando redimensionamento padrão")
+        super().resizeEvent(event)
+        # O arredondamento em pixels inteiros alteraria a altura em ~0,01 pol; fixa o tamanho exportado
+        if self.figure is not None:
+            self.figure.set_size_inches(LARGURA_FIGURA_POL, ALTURA_FIGURA_POL, forward=False)
+
+
+class MolduraProporcional(QWidget):
+    """Mantém o canvas centralizado com a proporção da figura, ocupando o maior espaço possível."""
+
+    def __init__(self, canvas, proporcao: float, parent=None):
+        super().__init__(parent)
+        self.canvas = canvas
+        self.proporcao = proporcao
+        canvas.setParent(self)
+        self.setMinimumSize(320, int(320 / proporcao))
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        largura = self.width()
+        altura = int(largura / self.proporcao)
+        if altura > self.height():
+            altura = self.height()
+            largura = int(altura * self.proporcao)
+        self.canvas.setGeometry((self.width() - largura) // 2, (self.height() - altura) // 2, largura, altura)
 
 
 class PlotCanvasWidget(QWidget):
@@ -38,8 +87,8 @@ class PlotCanvasWidget(QWidget):
         self._updating_ui = False
         self.tipo_grafico = "linhas"
 
-        self.fig = Figure(figsize=(8.5, 5.3), dpi=100)
-        self.canvas = FigureCanvasQTAgg(self.fig)
+        self.fig = Figure(figsize=(LARGURA_FIGURA_POL, ALTURA_FIGURA_POL), dpi=100)
+        self.canvas = CanvasProporcional(self.fig)
         self.toolbar = NavigationToolbar2QT(self.canvas, self)
 
         self._build_ui()
@@ -108,18 +157,17 @@ class PlotCanvasWidget(QWidget):
         lbl_dica = QLabel(
             "<span style='color: #64748b; font-size: 11px;'><b>Dica:</b> Arraste a legenda livremente &bull; Barra inferior para zoom e pan</span>"
         )
-        series_layout.addWidget(lbl_dica)
+        # A dica pode encolher (ou sumir) para não forçar a largura mínima do painel
+        lbl_dica.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        lbl_dica.setMinimumWidth(0)
+        series_layout.addWidget(lbl_dica, stretch=1)
 
-        self.btn_config = QPushButton(" Configurações")
-        self.btn_config.setIcon(get_icon("sliders", size=14))
-        self.btn_config.setToolTip("Abrir Submenu de Configurações e Estilo do Gráfico (Ctrl+E)")
-        self.btn_config.setCursor(Qt.PointingHandCursor)
-        self.btn_config.clicked.connect(self.configRequested.emit)
-        series_layout.addWidget(self.btn_config)
-
-        self.btn_hide = QPushButton(" Ocultar")
-        self.btn_hide.setIcon(get_icon("x", size=13))
-        self.btn_hide.setToolTip("Ocultar Área do Gráfico (Ctrl+G)")
+        # Configurações ficam na barra superior (ícone de controles / Ctrl+E)
+        self.btn_hide = QPushButton()
+        self.btn_hide.setObjectName("btnIcon")
+        self.btn_hide.setIcon(get_icon("x", size=15))
+        self.btn_hide.setToolTip("Ocultar o gráfico (Ctrl+G)")
+        self.btn_hide.setAccessibleName("Ocultar o gráfico")
         self.btn_hide.setCursor(Qt.PointingHandCursor)
         self.btn_hide.clicked.connect(self.hideRequested.emit)
         series_layout.addWidget(self.btn_hide)
@@ -132,10 +180,9 @@ class PlotCanvasWidget(QWidget):
         cc_layout = QVBoxLayout(canvas_card)
         cc_layout.setContentsMargins(6, 6, 6, 6)
         cc_layout.setSpacing(6)
-        cc_layout.setAlignment(Qt.AlignCenter)
 
-        self.canvas.setFixedSize(850, 530)
-        cc_layout.addWidget(self.canvas, 0, Qt.AlignCenter)
+        self.moldura_canvas = MolduraProporcional(self.canvas, LARGURA_FIGURA_POL / ALTURA_FIGURA_POL)
+        cc_layout.addWidget(self.moldura_canvas, stretch=1)
         cc_layout.addWidget(self.toolbar, 0, Qt.AlignCenter)
 
         layout.addWidget(canvas_card, stretch=1)

@@ -1,8 +1,8 @@
 {
-  "version": "1.1.0-dev.1",
+  "version": "1.1.0-dev.2",
   "status": "Dev",
   "release_date": "2026-10-28",
   "repo": "Igorhls/vespera-sci",
   "branch": "main",
-  "notes": "Vespera Sci v1.1.0-dev.1 (Canal Dev) — Colagem nunca altera valores sem confirmação, precisão preservada na tabela, banda IC 95% com distribuição t, barras de erro (± DP), exportação TIFF 600 DPI, projetos salvos na pasta do usuário e atualizador com verificação SHA-256."
+  "notes": "Vespera Sci v1.1.0-dev.2 (Canal Dev) — Interface: gráfico se adapta ao tamanho da janela sem cortar (a figura exportada continua 8,5 × 5,3 pol), barra superior em uma única linha com menu Projetos, ferramentas da tabela em ícones agrupados com dicas, botão do Boxplot destacado quando ativo e versão exibida no título."
 }

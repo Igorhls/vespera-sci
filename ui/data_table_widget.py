@@ -107,7 +107,7 @@ class DataTableWidget(QWidget):
         super().__init__(parent)
         self._updating_ui = False
         self.tipo_grafico = "linhas"
-        self.setMinimumWidth(560)
+        self.setMinimumWidth(500)
 
         # Pilhas de histórico para Desfazer / Refazer
         self._undo_stack = []
@@ -130,9 +130,11 @@ class DataTableWidget(QWidget):
 
         # Sistema de Abas Principal da Área de Dados
         self.tabs = QTabWidget()
-        self.btn_hide = QPushButton(" Ocultar")
-        self.btn_hide.setIcon(get_icon("x", size=13))
-        self.btn_hide.setToolTip("Ocultar Tabela de Dados (Ctrl+T)")
+        self.btn_hide = QPushButton()
+        self.btn_hide.setObjectName("btnIcon")
+        self.btn_hide.setIcon(get_icon("x", size=15))
+        self.btn_hide.setToolTip("Ocultar a tabela de dados (Ctrl+T)")
+        self.btn_hide.setAccessibleName("Ocultar a tabela de dados")
         self.btn_hide.setCursor(Qt.PointingHandCursor)
         self.btn_hide.clicked.connect(self.hideRequested.emit)
         self.tabs.setCornerWidget(self.btn_hide, Qt.TopRightCorner)
@@ -300,73 +302,55 @@ class DataTableWidget(QWidget):
         self.grp_rotulos_barras.setVisible(False)
         layout_dados.addWidget(self.grp_rotulos_barras)
 
-        # 3. Barra de Ferramentas da Tabela com Desfazer/Refazer e Ícones Vetoriais
+        # 3. Barra de Ferramentas da Tabela: ícones agrupados (linhas | séries | histórico | ajustes)
         hl_table_btns = QHBoxLayout()
-        hl_table_btns.setSpacing(6)
+        hl_table_btns.setSpacing(4)
 
-        self.btn_add_row = QPushButton("Linha")
-        self.btn_add_row.setIcon(get_icon("plus", size=15))
-        self.btn_add_row.setCursor(Qt.PointingHandCursor)
-        self.btn_add_row.clicked.connect(self._adicionar_linha)
+        def _ferramenta(icone, dica, slot):
+            btn = QPushButton()
+            btn.setIcon(get_icon(icone, size=17))
+            btn.setObjectName("btnIcon")
+            btn.setToolTip(dica)
+            btn.setAccessibleName(dica)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.clicked.connect(slot)
+            hl_table_btns.addWidget(btn)
+            return btn
 
-        self.btn_del_row = QPushButton("Remover")
-        self.btn_del_row.setIcon(get_icon("minus", size=15))
-        self.btn_del_row.setToolTip("Remover linha selecionada")
-        self.btn_del_row.setCursor(Qt.PointingHandCursor)
-        self.btn_del_row.clicked.connect(self._remover_linha)
+        def _separador():
+            sep = QFrame()
+            sep.setObjectName("separadorBarra")
+            sep.setFixedSize(1, 22)
+            hl_table_btns.addSpacing(4)
+            hl_table_btns.addWidget(sep)
+            hl_table_btns.addSpacing(4)
 
-        self.btn_add_col = QPushButton("+ Série")
-        self.btn_add_col.setIcon(get_icon("plus", size=14))
-        self.btn_add_col.setToolTip("Adicionar nova coluna / série de dados no modo Linhas")
-        self.btn_add_col.setCursor(Qt.PointingHandCursor)
-        self.btn_add_col.clicked.connect(self._adicionar_coluna)
-
-        self.btn_del_col = QPushButton("- Série")
-        self.btn_del_col.setIcon(get_icon("minus", size=14))
-        self.btn_del_col.setToolTip("Remover coluna / série selecionada")
-        self.btn_del_col.setCursor(Qt.PointingHandCursor)
-        self.btn_del_col.clicked.connect(self._remover_coluna)
-
-        self.btn_undo = QPushButton("Desfazer")
-        self.btn_undo.setIcon(get_icon("undo", size=15))
-        self.btn_undo.setToolTip("Desfazer última alteração (Ctrl+Z)")
-        self.btn_undo.setCursor(Qt.PointingHandCursor)
+        self.btn_add_row = _ferramenta("rows-plus", "Adicionar linha ao final", self._adicionar_linha)
+        self.btn_del_row = _ferramenta("rows-minus", "Remover a linha selecionada", self._remover_linha)
+        _separador()
+        self.btn_add_col = _ferramenta("columns-plus", "Adicionar série (coluna) — modo Linhas", self._adicionar_coluna)
+        self.btn_del_col = _ferramenta("columns-minus", "Remover a série (coluna) selecionada", self._remover_coluna)
+        _separador()
+        self.btn_undo = _ferramenta("undo", "Desfazer (Ctrl+Z)", self._desfazer)
         self.btn_undo.setEnabled(False)
-        self.btn_undo.clicked.connect(self._desfazer)
-
-        self.btn_redo = QPushButton("Refazer")
-        self.btn_redo.setIcon(get_icon("redo", size=15))
-        self.btn_redo.setToolTip("Refazer última alteração (Ctrl+Y)")
-        self.btn_redo.setCursor(Qt.PointingHandCursor)
+        self.btn_redo = _ferramenta("redo", "Refazer (Ctrl+Y)", self._refazer)
         self.btn_redo.setEnabled(False)
-        self.btn_redo.clicked.connect(self._refazer)
+        _separador()
+        self.btn_renum = _ferramenta(
+            "list-ordered", "Renumerar identificadores (P1, P2, P3...)", self._renumerar_pontos
+        )
+        self.btn_padronizar = _ferramenta(
+            "decimal", "Uniformizar casas decimais na exibição da tabela", self._padronizar_decimais
+        )
 
-        self.btn_renum = QPushButton("Renumerar")
-        self.btn_renum.setIcon(get_icon("hash", size=15))
-        self.btn_renum.setCursor(Qt.PointingHandCursor)
-        self.btn_renum.clicked.connect(self._renumerar_pontos)
+        hl_table_btns.addStretch()
 
-        self.btn_padronizar = QPushButton("Padronizar")
-        self.btn_padronizar.setIcon(get_icon("wand", size=15))
-        self.btn_padronizar.setCursor(Qt.PointingHandCursor)
-        self.btn_padronizar.clicked.connect(self._padronizar_decimais)
-
-        self.btn_ir_colar = QPushButton("Colar do Excel")
-        self.btn_ir_colar.setIcon(get_icon("clipboard", size=15))
+        self.btn_ir_colar = QPushButton("Colar")
+        self.btn_ir_colar.setIcon(get_icon("clipboard", color="#ffffff", size=15))
         self.btn_ir_colar.setObjectName("btnPrimary")
-        self.btn_ir_colar.setToolTip("Importador guiado ou cole direto no grid com Ctrl+V")
+        self.btn_ir_colar.setToolTip("Importador guiado — ou cole direto na tabela com Ctrl+V")
         self.btn_ir_colar.setCursor(Qt.PointingHandCursor)
         self.btn_ir_colar.clicked.connect(lambda: self.tabs.setCurrentIndex(3))
-
-        hl_table_btns.addWidget(self.btn_add_row)
-        hl_table_btns.addWidget(self.btn_del_row)
-        hl_table_btns.addWidget(self.btn_add_col)
-        hl_table_btns.addWidget(self.btn_del_col)
-        hl_table_btns.addWidget(self.btn_undo)
-        hl_table_btns.addWidget(self.btn_redo)
-        hl_table_btns.addWidget(self.btn_renum)
-        hl_table_btns.addWidget(self.btn_padronizar)
-        hl_table_btns.addStretch()
         hl_table_btns.addWidget(self.btn_ir_colar)
 
         layout_dados.addLayout(hl_table_btns)
@@ -682,23 +666,23 @@ class DataTableWidget(QWidget):
 
         if is_linhas:
             self.lbl_tit_dia.setText("<b>Identificador / Dia:</b>")
-            self.btn_renum.setText("Renumerar")
+            self._configurar_botao_renumerar("list-ordered", "Renumerar identificadores (P1, P2, P3...)")
             self.txt_paste.setPlaceholderText("Cole aqui os dados copiados do Excel...")
         elif is_barras:
             self.lbl_tit_dia.setText("<b>Cabeçalho / Variável:</b>")
-            self.btn_renum.setText("Restaurar Modelo TA")
+            self._configurar_botao_renumerar("refresh", "Restaurar os dados do modelo TA (substitui a tabela atual)")
             self.txt_paste.setPlaceholderText(
                 "Agosto\t27,32\t2,3\t28,5\t4,87\nDezembro\t28,6\t1,42\t29,4\t2,19"
             )
         elif is_dispersao:
             self.lbl_tit_dia.setText("<b>Título / Variáveis:</b>")
-            self.btn_renum.setText("Renumerar Pontos (P1..Pn)")
+            self._configurar_botao_renumerar("list-ordered", "Renumerar pontos (P1, P2, P3...)")
             self.txt_paste.setPlaceholderText(
                 "Cole dados de 2 colunas (X e Y) ou 3 colunas (Ponto, X, Y):\n34,2\t35,4\n34,7\t36,4\n34,9\t36,4\n..."
             )
         else:
             self.lbl_tit_dia.setText("<b>Identificador / Título:</b>")
-            self.btn_renum.setText("Renumerar Amostras")
+            self._configurar_botao_renumerar("list-ordered", "Renumerar amostras (P1, P2, P3...)")
             self.txt_paste.setPlaceholderText(
                 "Cole colunas de medições contínuas:\nP1\t26,2\t28,5\nP2\t26,5\t29,0\n..."
             )
@@ -1121,7 +1105,23 @@ class DataTableWidget(QWidget):
         self.atualizar_sumario_estatistico()
         self.dataOrMetaChanged.emit()
 
+    def _configurar_botao_renumerar(self, icone: str, dica: str):
+        self.btn_renum.setIcon(get_icon(icone, size=17))
+        self.btn_renum.setToolTip(dica)
+        self.btn_renum.setAccessibleName(dica)
+
     def _renumerar_pontos(self):
+        if self.tipo_grafico == "barras":
+            resp = QMessageBox.question(
+                self,
+                "Restaurar modelo TA",
+                "Substituir os dados da tabela pelos valores do modelo TA?\n"
+                "Você pode desfazer depois com Ctrl+Z.",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if resp != QMessageBox.Yes:
+                return
         self._push_undo_state()
         if self.tipo_grafico == "linhas":
             df = self._ler_dataframe_da_tabela()
