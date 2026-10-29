@@ -1,13 +1,21 @@
 """
 Gerenciamento de persistência de projetos (.vespera / .json) para o Vespera Sci.
 Suporta persistência local em arquivo único (.vespera) e banco histórico (projetos_salvos.json).
+O banco fica na pasta de dados do usuário (gravável mesmo com o app em Program Files ou num .app);
+um banco antigo na pasta de instalação é migrado automaticamente na primeira execução.
 Totalmente retrocompatível com projetos antigos e datasets prévios.
 """
 
 from datetime import datetime
 import json
+import logging
 import os
+import shutil
 import pandas as pd
+
+from core.paths import diretorio_codigo_fonte, diretorio_dados_usuario, gravar_json_atomico
+
+logger = logging.getLogger(__name__)
 
 
 class ProjectManager:
@@ -15,9 +23,21 @@ class ProjectManager:
 
     def __init__(self, caminho_banco: str = None):
         if caminho_banco is None:
-            raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            caminho_banco = os.path.join(raiz, "projetos_salvos.json")
+            caminho_banco = os.path.join(diretorio_dados_usuario(), "projetos_salvos.json")
+            self._migrar_banco_legado(caminho_banco)
         self.caminho_banco = caminho_banco
+
+    @staticmethod
+    def _migrar_banco_legado(caminho_novo: str):
+        """Copia o projetos_salvos.json das versões antigas (pasta de instalação) para a pasta do usuário."""
+        legado = os.path.join(diretorio_codigo_fonte(), "projetos_salvos.json")
+        if os.path.exists(caminho_novo) or not os.path.exists(legado):
+            return
+        try:
+            shutil.copy2(legado, caminho_novo)
+            logger.info("Banco de projetos migrado de %s para %s", legado, caminho_novo)
+        except OSError:
+            logger.exception("Falha ao migrar o banco de projetos legado")
 
     def ler_banco(self) -> dict:
         """Lê o arquivo JSON local contendo os projetos salvos na máquina."""
@@ -29,29 +49,25 @@ class ProjectManager:
                 if not isinstance(dados, dict) or "projetos" not in dados:
                     return {"ultimo_projeto_ativo": None, "projetos": {}}
                 return dados
-        except Exception:
+        except (OSError, ValueError):
+            logger.exception("Banco de projetos ilegível: %s", self.caminho_banco)
             return {"ultimo_projeto_ativo": None, "projetos": {}}
 
     def gravar_banco(self, banco: dict):
         """Salva o dicionário de projetos no banco local."""
         try:
-            with open(self.caminho_banco, "w", encoding="utf-8") as f:
-                json.dump(banco, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"Erro ao gravar banco local: {e}")
+            gravar_json_atomico(self.caminho_banco, banco)
+        except (OSError, TypeError, ValueError):
+            logger.exception("Erro ao gravar banco local: %s", self.caminho_banco)
 
     @staticmethod
     def salvar_arquivo_projeto(caminho: str, payload: dict) -> bool:
         """Salva o projeto em um arquivo individual (.vespera ou .json) no disco."""
         try:
-            pasta = os.path.dirname(os.path.abspath(caminho))
-            if pasta and not os.path.exists(pasta):
-                os.makedirs(pasta, exist_ok=True)
-            with open(caminho, "w", encoding="utf-8") as f:
-                json.dump(payload, f, ensure_ascii=False, indent=2)
+            gravar_json_atomico(caminho, payload)
             return True
-        except Exception as e:
-            print(f"Erro ao salvar arquivo de projeto em {caminho}: {e}")
+        except (OSError, TypeError, ValueError):
+            logger.exception("Erro ao salvar arquivo de projeto em %s", caminho)
             return False
 
     @staticmethod
@@ -65,8 +81,8 @@ class ProjectManager:
             if isinstance(dados, dict) and "dados" in dados:
                 return dados
             return {}
-        except Exception as e:
-            print(f"Erro ao ler arquivo de projeto {caminho}: {e}")
+        except (OSError, ValueError):
+            logger.exception("Erro ao ler arquivo de projeto %s", caminho)
             return {}
 
     @staticmethod

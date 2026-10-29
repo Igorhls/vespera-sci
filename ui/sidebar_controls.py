@@ -376,6 +376,15 @@ class SidebarControlsWidget(QScrollArea):
         )
         self.spn_espaco_barras.valueChanged.connect(self._emit_change)
 
+        self.cmb_modo_desvio = QComboBox()
+        self.cmb_modo_desvio.addItem("Barras de erro (± DP) — padrão científico", "erro")
+        self.cmb_modo_desvio.addItem("Barras separadas (layout legado)", "barras")
+        self.cmb_modo_desvio.setToolTip(
+            "Como o desvio padrão é desenhado: como barra de erro sobre a média ou como uma barra própria."
+        )
+        self.cmb_modo_desvio.currentIndexChanged.connect(self._emit_change)
+
+        form_barras.addRow("Desvio Padrão:", self.cmb_modo_desvio)
         form_barras.addRow("Formato:", self.cmb_fmt_decimais)
         form_barras.addRow("Largura Total:", self.spn_largura_grupo)
         form_barras.addRow("Espaço Pares (Subgrupos):", self.spn_espaco_subgrupos)
@@ -581,7 +590,7 @@ class SidebarControlsWidget(QScrollArea):
         self.btn_cor_moldura.colorChanged.connect(self._emit_change)
 
         self.spn_intervalo_ticks_y = QDoubleSpinBox()
-        self.spn_intervalo_ticks_y.setRange(0.0, 100.0)
+        self.spn_intervalo_ticks_y.setRange(0.0, 1.0e5)
         self.spn_intervalo_ticks_y.setSingleStep(1.0)
         self.spn_intervalo_ticks_y.setDecimals(1)
         self.spn_intervalo_ticks_y.setValue(0.0)
@@ -593,7 +602,7 @@ class SidebarControlsWidget(QScrollArea):
         self.spn_intervalo_ticks_y.valueChanged.connect(self._emit_change)
 
         self.spn_intervalo_ticks_x = QDoubleSpinBox()
-        self.spn_intervalo_ticks_x.setRange(0.0, 500.0)
+        self.spn_intervalo_ticks_x.setRange(0.0, 1.0e5)
         self.spn_intervalo_ticks_x.setSingleStep(0.5)
         self.spn_intervalo_ticks_x.setDecimals(1)
         self.spn_intervalo_ticks_x.setValue(0.0)
@@ -916,6 +925,8 @@ class SidebarControlsWidget(QScrollArea):
         self._set_combo_text(
             self.cmb_fmt_decimais, cfg.get("formato_decimais_barras", DEFAULT_CONFIG["formato_decimais_barras"])
         )
+        idx_desvio = self.cmb_modo_desvio.findData(cfg.get("modo_desvio_barras", "erro"))
+        self.cmb_modo_desvio.setCurrentIndex(max(0, idx_desvio))
         self.spn_largura_grupo.setValue(float(cfg.get("largura_grupo_barras", 0.68)))
         self.spn_espaco_subgrupos.setValue(float(cfg.get("espaco_subgrupos_barras", 0.35)))
         self.spn_espaco_barras.setValue(float(cfg.get("espaco_barras", 0.0)))
@@ -970,6 +981,7 @@ class SidebarControlsWidget(QScrollArea):
             "exibir_valores_barras": self.chk_exibir_valores_barras.isChecked(),
             "formato_decimais_barras": self.cmb_fmt_decimais.currentText(),
             "negrito_valores_barras": self.chk_negrito_barras.isChecked(),
+            "modo_desvio_barras": self.cmb_modo_desvio.currentData() or "erro",
             "largura_grupo_barras": float(self.spn_largura_grupo.value()),
             "espaco_subgrupos_barras": float(self.spn_espaco_subgrupos.value()),
             "espaco_barras": float(self.spn_espaco_barras.value()),

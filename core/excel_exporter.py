@@ -3,6 +3,7 @@ Exportação de tabelas formatadas e gráficos nativos do Microsoft Excel (.xlsx
 """
 
 import io
+import logging
 import numpy as np
 import openpyxl
 from openpyxl.chart import BarChart, LineChart, Reference, ScatterChart, Series
@@ -10,6 +11,8 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 import pandas as pd
 
 from core.sanitizer import calcular_regressao_linear
+
+logger = logging.getLogger(__name__)
 
 
 def gerar_excel_linhas_bytes(
@@ -322,7 +325,7 @@ def gerar_excel_dispersao_bytes(
         chart.series.append(series)
         ws.add_chart(chart, "F2")
     except Exception:
-        pass
+        logger.exception("Falha ao gerar o gráfico nativo de dispersão no Excel (planilha exportada sem ele)")
 
     ws.column_dimensions["A"].width = 3
     ws.column_dimensions["B"].width = 24

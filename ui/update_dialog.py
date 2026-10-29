@@ -6,7 +6,8 @@ Totalmente em português, sem emojis e com identidade visual acadêmica e profis
 
 import sys
 import webbrowser
-from PySide6.QtCore import QProcess, QSettings, Qt, QThread, Signal
+from PySide6.QtCore import QProcess, QSettings, Qt, QThread, QUrl, Signal
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -19,10 +20,16 @@ from PySide6.QtWidgets import (
     QPushButton,
     QTextBrowser,
     QVBoxLayout,
-    QWidget,
 )
 
-from core.updater import baixar_e_aplicar_atualizacao, verificar_atualizacao_github
+from core.paths import executando_empacotado
+from core.updater import (
+    ACAO_ABRIR_INSTALADOR,
+    ACAO_APLICAR_AO_FECHAR,
+    baixar_e_aplicar_atualizacao,
+    executar_script_pendente,
+    verificar_atualizacao_github,
+)
 from ui.icons import get_icon
 
 
@@ -46,17 +53,19 @@ class ApplyUpdateWorker(QThread):
     progressUpdated = Signal(int, str)
     finishedApply = Signal(dict)
 
-    def __init__(self, canal: str = "stable", download_url: str = "", sha_remoto_full: str = ""):
+    def __init__(self, canal: str = "stable", download_url: str = "", sha_remoto_full: str = "", sha256_esperado: str = ""):
         super().__init__()
         self.canal = canal
         self.download_url = download_url
         self.sha_remoto_full = sha_remoto_full
+        self.sha256_esperado = sha256_esperado
 
     def run(self):
         res = baixar_e_aplicar_atualizacao(
             canal=self.canal,
             download_url=self.download_url,
             sha_remoto_full=self.sha_remoto_full,
+            sha256_esperado=self.sha256_esperado,
             progress_callback=lambda pct, msg: self.progressUpdated.emit(pct, msg),
         )
         self.finishedApply.emit(res)
@@ -79,7 +88,9 @@ class UpdateDialog(QDialog):
 
         self._sha_remoto_full = ""
         self._download_url = ""
+        self._sha256_esperado = ""
         self._html_url = ""
+        self._script_pendente = ""
         self._check_worker = None
         self._apply_worker = None
 
@@ -277,6 +288,7 @@ class UpdateDialog(QDialog):
 
         self._sha_remoto_full = res.get("sha_remoto_full", "")
         self._download_url = res.get("download_url", "")
+        self._sha256_esperado = res.get("sha256_esperado", "")
         self._html_url = res.get("html_url", "")
 
         v_local = res.get("versao_local", "1.0.0")
@@ -360,6 +372,7 @@ class UpdateDialog(QDialog):
             canal=self._canal_atual,
             download_url=self._download_url,
             sha_remoto_full=self._sha_remoto_full,
+            sha256_esperado=self._sha256_esperado,
         )
         self._apply_worker.progressUpdated.connect(self._ao_atualizar_progresso)
         self._apply_worker.finishedApply.connect(self._ao_terminar_update)
@@ -376,9 +389,26 @@ class UpdateDialog(QDialog):
         if res.get("sucesso"):
             self.progress_bar.setValue(100)
             self.lbl_status_icon.setPixmap(get_icon("check-circle", color="#16a34a", size=24).pixmap(24, 24))
-            self.lbl_status_titulo.setText("<b>Atualização concluída com sucesso!</b>")
-            self.lbl_status_desc.setText("Clique em 'Reiniciar Vespera Sci' para carregar a nova versão.")
             self.btn_atualizar.setVisible(False)
+            acao = res.get("acao_pos")
+            if acao == ACAO_ABRIR_INSTALADOR:
+                arquivo = res.get("arquivo", "")
+                self.lbl_status_titulo.setText("<b>Instalador da nova versão baixado.</b>")
+                self.lbl_status_desc.setText(
+                    f"O instalador foi salvo em:\n{arquivo}\n"
+                    "Feche o Vespera Sci e instale a nova versão (no macOS, arraste o app para Applications)."
+                )
+                if arquivo:
+                    QDesktopServices.openUrl(QUrl.fromLocalFile(arquivo))
+                return
+            self._script_pendente = res.get("script", "") if acao == ACAO_APLICAR_AO_FECHAR else ""
+            self.lbl_status_titulo.setText(
+                "<b>Atualização pronta para instalar.</b>" if self._script_pendente else "<b>Atualização concluída com sucesso!</b>"
+            )
+            detalhe = res.get("detalhe", "")
+            self.lbl_status_desc.setText(
+                "Clique em 'Reiniciar Vespera Sci' para carregar a nova versão." + (f"\n{detalhe}" if detalhe else "")
+            )
             self.btn_reiniciar.setVisible(True)
         else:
             self.btn_atualizar.setEnabled(True)
@@ -389,5 +419,11 @@ class UpdateDialog(QDialog):
             )
 
     def _reiniciar_app(self):
-        QProcess.startDetached(sys.executable, sys.argv)
+        if self._script_pendente:
+            # O script aguarda este processo encerrar, instala a nova versão e reabre o app
+            executar_script_pendente(self._script_pendente)
+        elif executando_empacotado():
+            QProcess.startDetached(sys.executable, sys.argv[1:])
+        else:
+            QProcess.startDetached(sys.executable, sys.argv)
         QApplication.quit()

@@ -3,6 +3,8 @@ Widget de visualização gráfica interativa (Matplotlib FigureCanvasQTAgg + Nav
 Repaginação visual completa: ícones vetoriais SVG, sem emojis e botões de exportação destacados.
 """
 
+import logging
+
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolbar2QT
 from matplotlib.figure import Figure
 from PySide6.QtCore import Qt, Signal
@@ -19,6 +21,8 @@ from PySide6.QtWidgets import (
 )
 
 from ui.icons import get_icon
+
+logger = logging.getLogger(__name__)
 
 
 class PlotCanvasWidget(QWidget):
@@ -143,7 +147,8 @@ class PlotCanvasWidget(QWidget):
         exp_layout.setContentsMargins(12, 10, 12, 10)
         exp_layout.setSpacing(10)
 
-        self.btn_png = QPushButton("Exportar PNG (300 DPI)")
+        self.btn_png = QPushButton("Exportar Imagem (PNG/TIFF)")
+        self.btn_png.setToolTip("PNG a 300 DPI ou TIFF a 600 DPI (exigido por vários periódicos)")
         self.btn_png.setIcon(get_icon("file-image", color="#ffffff", size=16))
         self.btn_png.setObjectName("btnPrimary")
         self.btn_png.setCursor(Qt.PointingHandCursor)
@@ -325,18 +330,35 @@ class PlotCanvasWidget(QWidget):
             self.seriesVisibilityChanged.emit()
 
     def _exportar_png(self):
-        caminho, _ = QFileDialog.getSaveFileName(
+        filtro_png = "Imagem PNG 300 DPI (*.png)"
+        filtro_tiff = "Imagem TIFF 600 DPI (*.tif *.tiff)"
+        caminho, filtro = QFileDialog.getSaveFileName(
             self,
-            "Salvar Imagem PNG (300 DPI)",
+            "Salvar Imagem Rasterizada",
             f"{self._nome_base_padrao}_figura.png",
-            "Imagem PNG (*.png)",
+            f"{filtro_png};;{filtro_tiff}",
         )
-        if caminho:
-            try:
+        if not caminho:
+            return
+        e_tiff = caminho.lower().endswith((".tif", ".tiff")) or (
+            filtro == filtro_tiff and not caminho.lower().endswith(".png")
+        )
+        if e_tiff and not caminho.lower().endswith((".tif", ".tiff")):
+            caminho += ".tif"
+        try:
+            if e_tiff:
+                self.fig.savefig(
+                    caminho, format="tiff", dpi=600, bbox_inches="tight",
+                    pil_kwargs={"compression": "tiff_lzw"},
+                )
+                descricao = "TIFF (600 DPI)"
+            else:
                 self.fig.savefig(caminho, format="png", dpi=300, bbox_inches="tight")
-                QMessageBox.information(self, "Exportação Concluída", f"Imagem PNG (300 DPI) salva com sucesso em:\n{caminho}")
-            except Exception as e:
-                QMessageBox.critical(self, "Erro ao Exportar PNG", str(e))
+                descricao = "PNG (300 DPI)"
+            QMessageBox.information(self, "Exportação Concluída", f"Imagem {descricao} salva com sucesso em:\n{caminho}")
+        except Exception as e:
+            logger.exception("Erro ao exportar imagem")
+            QMessageBox.critical(self, "Erro ao Exportar Imagem", str(e))
 
     def _exportar_pdf(self):
         caminho, _ = QFileDialog.getSaveFileName(
@@ -350,6 +372,7 @@ class PlotCanvasWidget(QWidget):
                 self.fig.savefig(caminho, format="pdf", bbox_inches="tight")
                 QMessageBox.information(self, "Exportação Concluída", f"Arquivo PDF vetorial salvo com sucesso em:\n{caminho}")
             except Exception as e:
+                logger.exception("Erro ao exportar PDF")
                 QMessageBox.critical(self, "Erro ao Exportar PDF", str(e))
 
     def _solicitar_exportacao_excel(self):
@@ -374,4 +397,5 @@ class PlotCanvasWidget(QWidget):
                 self.fig.savefig(caminho, format="svg", bbox_inches="tight")
                 QMessageBox.information(self, "Exportação Concluída", f"Arquivo vetorial SVG salvo com sucesso em:\n{caminho}")
             except Exception as e:
+                logger.exception("Erro ao exportar SVG")
                 QMessageBox.critical(self, "Erro ao Exportar SVG", str(e))

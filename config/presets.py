@@ -84,6 +84,7 @@ PRESETS_BARRAS = {
             "exibir_grade": True,
             "formato_decimais_barras": "Automático (ex: 27,32 | 2,3)",
             "negrito_valores_barras": False,
+            "modo_desvio_barras": "barras",
         },
     },
     "TA — Média e Desvio Padrão (Agosto e Dezembro)": {

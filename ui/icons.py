@@ -4,7 +4,7 @@ Substitui completamente os emojis por ícones nítidos, modernos e profissionais
 """
 
 import os
-from PySide6.QtCore import QByteArray, QSize, Qt
+from PySide6.QtCore import QByteArray, Qt
 from PySide6.QtGui import QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 

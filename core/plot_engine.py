@@ -9,11 +9,18 @@ import matplotlib.ticker as ticker
 import numpy as np
 import pandas as pd
 
-from core.sanitizer import calcular_regressao_linear, formatar_numero_ptbr
+from core.sanitizer import calcular_banda_regressao, calcular_regressao_linear, formatar_numero_ptbr
+
+LADOS_EIXO = (("top", "topo"), ("right", "direita"), ("bottom", "baixo"), ("left", "esquerda"))
+COR_GRADE = "#cbd5e1"
 
 
 def configurar_fonte_matplotlib(fonte_nome: str):
-    """Configura a família tipográfica do Matplotlib."""
+    """
+    Configura a família tipográfica do Matplotlib.
+    Os rótulos dos ticks são criados apenas no momento do desenho, por isso a fonte precisa
+    estar nos rcParams globais (um rc_context temporário não alcançaria esses textos).
+    """
     if "Times" in fonte_nome:
         plt.rcParams["font.serif"] = ["Times New Roman", "Times", "DejaVu Serif", "serif"]
         plt.rcParams["font.family"] = "serif"
@@ -56,6 +63,159 @@ def calcular_passo_ticks_y(pad_min: float, pad_max: float, intervalo_config: flo
     return float(fator * ordem)
 
 
+def _formatar_tick_ptbr(val, pos=None):
+    """Rótulo de tick com vírgula decimal (padrão ABNT / PT-BR)."""
+    if abs(val - round(val)) < 1e-6:
+        return f"{int(round(val))}"
+    txt = f"{val:.4f}".rstrip("0").rstrip(".")
+    return txt.replace(".", ",")
+
+
+# =======================================================================
+# Estilo compartilhado entre os quatro tipos de gráfico
+# =======================================================================
+
+def _preparar_figura(fig, figsize):
+    if fig is None:
+        fig, ax = plt.subplots(figsize=figsize, dpi=200)
+    else:
+        fig.clear()
+        ax = fig.add_subplot(111)
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
+    return fig, ax
+
+
+def _aplicar_bordas(ax, bordas_config: dict, espessura_padrao: float = 1.0):
+    cor_borda = bordas_config.get("cor", "black")
+    esp_borda = bordas_config.get("espessura", espessura_padrao)
+    for lado_mpl, lado_cfg in LADOS_EIXO:
+        ax.spines[lado_mpl].set_visible(bordas_config.get(lado_cfg, True))
+        ax.spines[lado_mpl].set_color(cor_borda)
+        ax.spines[lado_mpl].set_linewidth(esp_borda)
+    return cor_borda
+
+
+def _aplicar_ticks(
+    ax,
+    ticks_config: dict,
+    bordas_config: dict,
+    tamanho_fonte: float,
+    direcao_padrao: str,
+    lados_padrao: dict,
+    comprimento_maior: float = 5.0,
+    largura_maior: float = 1.0,
+    comprimento_menor: float = 2.8,
+    locator_menor_x=None,
+    locator_menor_y=None,
+):
+    """Ticks maiores e menores. Um tick só aparece se a borda do mesmo lado estiver visível."""
+    cor_borda = bordas_config.get("cor", "black")
+    direcao = ticks_config.get("direcao", direcao_padrao)
+    lados = {
+        lado_mpl: ticks_config.get(lado_cfg, lados_padrao.get(lado_cfg, True)) and bordas_config.get(lado_cfg, True)
+        for lado_mpl, lado_cfg in LADOS_EIXO
+    }
+
+    ax.tick_params(
+        which="major",
+        direction=direcao,
+        length=comprimento_maior,
+        width=largura_maior,
+        color=cor_borda,
+        labelsize=tamanho_fonte - 0.5,
+        **lados,
+    )
+
+    if ticks_config.get("minor_ticks", True):
+        if locator_menor_x is not None:
+            ax.xaxis.set_minor_locator(locator_menor_x)
+        if locator_menor_y is not None:
+            ax.yaxis.set_minor_locator(locator_menor_y)
+        ax.tick_params(
+            which="minor",
+            direction=direcao,
+            length=comprimento_menor,
+            width=0.8,
+            color=cor_borda,
+            **lados,
+        )
+    else:
+        ax.xaxis.set_minor_locator(ticker.NullLocator())
+        ax.yaxis.set_minor_locator(ticker.NullLocator())
+
+
+def _aplicar_grade(ax, exibir_grade: bool, eixo: str):
+    ax.set_axisbelow(True)
+    if exibir_grade:
+        ax.grid(True, which="major", axis=eixo, color=COR_GRADE, linestyle="--", linewidth=0.85, alpha=0.85, zorder=0)
+    else:
+        ax.grid(False)
+
+
+def _aplicar_titulo_e_rotulos(ax, titulo, rotulo_x, rotulo_y, tamanho_fonte, bordas_config, delta_fonte_x=0.0):
+    ax.set_xlabel(rotulo_x, fontsize=tamanho_fonte + delta_fonte_x, color="black", labelpad=8)
+    ax.set_ylabel(rotulo_y, fontsize=tamanho_fonte, color="black", labelpad=8)
+    if titulo and titulo.strip():
+        pad_val = 12 if bordas_config.get("topo", True) else 22
+        ax.set_title(titulo, fontsize=tamanho_fonte + 1.5, color="black", pad=pad_val, fontweight="normal")
+
+
+def _criar_legenda(
+    ax,
+    legenda_config: dict,
+    ncol: int,
+    tamanho_fonte: float,
+    reducao_fonte: float = 1.5,
+    espessura_moldura: float = 0.9,
+    **estilo,
+):
+    if not ax.get_legend_handles_labels()[0]:
+        return None
+    moldura = legenda_config.get("moldura", True)
+    leg = ax.legend(
+        loc=legenda_config.get("loc", "upper right"),
+        bbox_to_anchor=(legenda_config.get("pos_x", 0.98), legenda_config.get("pos_y", 0.98)),
+        ncol=max(1, ncol) if legenda_config.get("orientacao") == "Horizontal" else 1,
+        frameon=moldura,
+        edgecolor="black" if moldura else "none",
+        facecolor="white",
+        framealpha=1.0,
+        fontsize=tamanho_fonte - reducao_fonte,
+        **estilo,
+    )
+    if moldura:
+        leg.get_frame().set_linewidth(espessura_moldura)
+        leg.set_zorder(10)
+    try:
+        leg.set_draggable(True)
+    except Exception:
+        pass
+    return leg
+
+
+def _limites_automaticos(valores, min_y, max_y, margem_relativa: float, passo_arredondamento: float = 2.0):
+    """
+    Limites do eixo Y: usa min_y/max_y do usuário quando fornecidos, senão arredonda os dados
+    para múltiplos de passo_arredondamento com a margem pedida. Sempre retorna um par válido.
+    """
+    if valores:
+        vmin, vmax = min(valores), max(valores)
+        margem = (vmax - vmin) * margem_relativa if vmax > vmin else passo_arredondamento
+        auto_min = np.floor((vmin - margem) / passo_arredondamento) * passo_arredondamento
+        auto_max = np.ceil((vmax + margem) / passo_arredondamento) * passo_arredondamento
+    else:
+        auto_min, auto_max = 0.0, 10.0
+    pad_min = float(min_y) if min_y is not None else float(auto_min)
+    pad_max = float(max_y) if max_y is not None else float(auto_max)
+    if pad_max <= pad_min:
+        pad_max = pad_min + passo_arredondamento
+    return pad_min, pad_max
+
+
+# =======================================================================
+# Gráfico de Linhas
+# =======================================================================
 
 def renderizar_grafico_linhas(
     df: pd.DataFrame,
@@ -79,29 +239,25 @@ def renderizar_grafico_linhas(
     marcadores_map: dict = None,
     rotulos_legenda: dict = None,
     tamanho_marcador: float = 6.0,
+    marcadores_vazados: bool = False,
 ):
     """
     Renderiza o gráfico de linhas (Pontos P1..Pn) com controle milimétrico de tipografia,
     cores, séries visíveis, bordas do quadro e legenda arrastável.
+    marcadores_vazados: preenche os símbolos de branco (estilo monocromático para impressão P&B).
     """
     configurar_fonte_matplotlib(fonte_nome)
+    fig, ax = _preparar_figura(fig, (7.2, 4.4))
 
-    if fig is None:
-        fig, ax = plt.subplots(figsize=(7.2, 4.4), dpi=200)
-    else:
-        fig.clear()
-        ax = fig.add_subplot(111)
-
-    fig.patch.set_facecolor("white")
-    ax.set_facecolor("white")
-
-    col_id = "Pontos" if "Pontos" in df.columns else df.columns[0]
-    pontos = df[col_id].astype(str).tolist() if len(df) > 0 else []
+    series_ativas = list(series_ativas or [])
+    col_id = "Pontos" if "Pontos" in df.columns else (df.columns[0] if len(df.columns) else None)
+    pontos = df[col_id].astype(str).tolist() if col_id is not None and len(df) > 0 else []
     x_indices = np.arange(len(pontos))
 
     colunas_candidatas = [c for c in df.columns if c != col_id]
     ordem_historica = ["Manha", "Tarde", "Noite"]
     colunas_plot = [c for c in ordem_historica if c in colunas_candidatas] + [c for c in colunas_candidatas if c not in ordem_historica]
+    colunas_visiveis = [c for c in colunas_plot if not series_ativas or c in series_ativas]
 
     PALETA_CORES_PADRAO = ["#222222", "#e74c3c", "#2980b9", "#27ae60", "#8e44ad", "#d35400", "#16a085", "#f39c12", "#34495e"]
     LISTA_MARCADORES_PADRAO = ["o", "s", "^", "D", "v", "<", ">", "p", "*"]
@@ -109,8 +265,9 @@ def renderizar_grafico_linhas(
     if marcadores_map is None:
         marcadores_map = {"Manha": "o", "Tarde": "s", "Noite": "^"}
 
+    todos_valores = []
     for idx_col, col_name in enumerate(colunas_plot):
-        if series_ativas is not None and len(series_ativas) > 0 and col_name not in series_ativas:
+        if col_name not in colunas_visiveis:
             continue
 
         m = marcadores_map.get(col_name, LISTA_MARCADORES_PADRAO[idx_col % len(LISTA_MARCADORES_PADRAO)]) if com_marcadores else None
@@ -121,6 +278,7 @@ def renderizar_grafico_linhas(
         lbl = rotulos_legenda.get(col_name, col_name) if rotulos_legenda else col_name
 
         s_val = pd.to_numeric(df[col_name], errors="coerce")
+        todos_valores.extend(s_val.dropna().tolist())
         ax.plot(
             x_indices,
             s_val,
@@ -131,138 +289,48 @@ def renderizar_grafico_linhas(
             marker=m,
             markersize=tamanho_marcador,
             markeredgecolor=cor,
-            markerfacecolor="white" if com_marcadores and "Monocromático" in str(cores_periodos) else cor,
+            markerfacecolor="white" if (m and marcadores_vazados) else cor,
         )
 
     if len(x_indices) > 0:
         ax.set_xticks(x_indices)
         ax.set_xticklabels(pontos, fontsize=tamanho_fonte - 0.5)
-
-    todas_temps = []
-    for col_name in colunas_plot:
-        if series_ativas is None or len(series_ativas) == 0 or col_name in series_ativas:
-            todas_temps.extend(pd.to_numeric(df[col_name], errors="coerce").dropna().tolist())
-
-    if todas_temps:
-        real_min = min(todas_temps)
-        real_max = max(todas_temps)
-        pad_min = (int(real_min // 2) * 2) if min_y is None else float(min_y)
-        pad_max = (int(np.ceil(real_max / 2)) * 2) if max_y is None else float(max_y)
-        if pad_max <= pad_min:
-            pad_max = pad_min + 2.0
-        ax.set_ylim(pad_min, pad_max)
-    elif min_y is not None and max_y is not None:
-        ax.set_ylim(float(min_y), max(float(max_y), float(min_y) + 2.0))
-
-    if len(x_indices) > 0:
         ax.set_xlim(-0.55, len(x_indices) - 0.45)
 
-    cor_borda = bordas_config.get("cor", "black")
-    esp_borda = bordas_config.get("espessura", 1.15)
+    pad_min, pad_max = _limites_automaticos(todos_valores, min_y, max_y, margem_relativa=0.0)
+    ax.set_ylim(pad_min, pad_max)
 
-    ax.spines["top"].set_visible(bordas_config.get("topo", True))
-    ax.spines["right"].set_visible(bordas_config.get("direita", True))
-    ax.spines["bottom"].set_visible(bordas_config.get("baixo", True))
-    ax.spines["left"].set_visible(bordas_config.get("esquerda", True))
-
-    for s_name in ["top", "right", "bottom", "left"]:
-        ax.spines[s_name].set_color(cor_borda)
-        ax.spines[s_name].set_linewidth(esp_borda)
-
-    direcao_t = ticks_config.get("direcao", "in")
-    ticks_topo = ticks_config.get("topo", True) and bordas_config.get("topo", True)
-    ticks_dir = ticks_config.get("direita", True) and bordas_config.get("direita", True)
-    ticks_baixo = ticks_config.get("baixo", True) and bordas_config.get("baixo", True)
-    ticks_esq = ticks_config.get("esquerda", True) and bordas_config.get("esquerda", True)
-
-    ax.tick_params(
-        which="major",
-        direction=direcao_t,
-        top=ticks_topo,
-        right=ticks_dir,
-        bottom=ticks_baixo,
-        left=ticks_esq,
-        length=5.5,
-        width=1.1,
-        color=cor_borda,
-        labelsize=tamanho_fonte - 0.5,
-    )
+    _aplicar_bordas(ax, bordas_config, espessura_padrao=1.15)
 
     passo_y = calcular_passo_ticks_y(pad_min, pad_max, ticks_config.get("intervalo_y", 0.0))
     ax.yaxis.set_major_locator(ticker.MultipleLocator(passo_y))
+    ax.yaxis.set_major_formatter(ticker.FuncFormatter(_formatar_tick_ptbr))
+    subdivisoes = 5 if (passo_y >= 5.0 and passo_y % 5 == 0) else 2
+    _aplicar_ticks(
+        ax, ticks_config, bordas_config, tamanho_fonte,
+        direcao_padrao="in",
+        lados_padrao={"topo": True, "direita": True, "baixo": True, "esquerda": True},
+        comprimento_maior=5.5, largura_maior=1.1, comprimento_menor=3.2,
+        locator_menor_x=ticker.AutoMinorLocator(2),
+        locator_menor_y=ticker.AutoMinorLocator(subdivisoes),
+    )
 
-    if ticks_config.get("minor_ticks", True):
-        ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(2))
-        subdivisoes = 5 if (passo_y >= 5.0 and passo_y % 5 == 0) else 2
-        ax.yaxis.set_minor_locator(ticker.AutoMinorLocator(subdivisoes))
-        ax.tick_params(
-            which="minor",
-            direction=direcao_t,
-            top=ticks_topo,
-            right=ticks_dir,
-            bottom=ticks_baixo,
-            left=ticks_esq,
-            length=3.2,
-            width=0.8,
-            color=cor_borda,
+    _aplicar_grade(ax, exibir_grade, "both")
+    _aplicar_titulo_e_rotulos(ax, titulo_grafico, rotulo_x, rotulo_y, tamanho_fonte, bordas_config)
+
+    if legenda_config.get("exibir", True) and colunas_visiveis:
+        _criar_legenda(
+            ax, legenda_config, len(colunas_visiveis), tamanho_fonte,
+            espessura_moldura=1.0, handlelength=2.4, handletextpad=0.6, borderpad=0.55, columnspacing=1.5,
         )
-    else:
-        ax.xaxis.set_minor_locator(ticker.NullLocator())
-        ax.yaxis.set_minor_locator(ticker.NullLocator())
-
-    ax.set_axisbelow(True)
-    if exibir_grade:
-        ax.grid(
-            True,
-            which="major",
-            axis="both",
-            color="#cbd5e1",
-            linestyle="--",
-            linewidth=0.85,
-            alpha=0.85,
-            zorder=0,
-        )
-    else:
-        ax.grid(False)
-
-    ax.set_xlabel(rotulo_x, fontsize=tamanho_fonte, color="black", labelpad=8)
-    ax.set_ylabel(rotulo_y, fontsize=tamanho_fonte, color="black", labelpad=8)
-
-    if titulo_grafico and titulo_grafico.strip():
-        pad_val = 12 if bordas_config.get("topo", True) else 22
-        ax.set_title(titulo_grafico, fontsize=tamanho_fonte + 1.5, color="black", pad=pad_val, fontweight="normal")
-
-    if legenda_config.get("exibir", True) and len(series_ativas) > 0:
-        pos_x = legenda_config.get("pos_x", 0.98)
-        pos_y = legenda_config.get("pos_y", 0.98)
-        loc_ancora = legenda_config.get("loc", "upper right")
-        ncol_leg = len(series_ativas) if legenda_config.get("orientacao") == "Horizontal" else 1
-        moldura_leg = legenda_config.get("moldura", True)
-
-        leg = ax.legend(
-            loc=loc_ancora,
-            bbox_to_anchor=(pos_x, pos_y),
-            ncol=ncol_leg,
-            frameon=moldura_leg,
-            edgecolor="black" if moldura_leg else "none",
-            facecolor="white",
-            framealpha=1.0,
-            fontsize=tamanho_fonte - 1.5,
-            handlelength=2.4,
-            handletextpad=0.6,
-            borderpad=0.55,
-            columnspacing=1.5,
-        )
-        if moldura_leg:
-            leg.get_frame().set_linewidth(1.0)
-        try:
-            leg.set_draggable(True)
-        except Exception:
-            pass
 
     fig.tight_layout()
     return fig
 
+
+# =======================================================================
+# Gráfico de Barras
+# =======================================================================
 
 def calcular_posicoes_barras(
     n_series: int,
@@ -316,6 +384,11 @@ def calcular_posicoes_barras(
     return largura_barra, offsets
 
 
+MODO_DESVIO_ERRO = "erro"
+MODO_DESVIO_BARRAS = "barras"
+PARES_MEDIA_DESVIO = [("Bosque", "Desvio_Bosque"), ("Estacionamento", "Desvio_Estacionamento")]
+
+
 def renderizar_grafico_barras(
     df: pd.DataFrame,
     titulo_grafico: str,
@@ -340,34 +413,53 @@ def renderizar_grafico_barras(
     hachuras_barras: dict = None,
     espaco_subgrupos: float = 0.35,
     espaco_barras: float = 0.0,
+    modo_desvio: str = MODO_DESVIO_ERRO,
 ):
     """
     Renderiza o Gráfico de Barras Agrupadas (Média e Desvio Padrão: Bosque vs Estacionamento)
     no padrão OriginLab Pro com suporte a padrões de hachura (hatches), espaçamento de subgrupos e legenda arrastável.
+
+    modo_desvio:
+    - "erro" (padrão científico): o desvio padrão é desenhado como barra de erro (±DP) sobre a média.
+    - "barras": o desvio padrão é desenhado como uma barra própria ao lado da média (layout legado).
+    Células vazias não geram barra (em vez de uma barra de altura zero).
     """
     configurar_fonte_matplotlib(fonte_nome)
+    fig, ax = _preparar_figura(fig, (7.4, 4.6))
 
-    if fig is None:
-        fig, ax = plt.subplots(figsize=(7.4, 4.6), dpi=200)
-    else:
-        fig.clear()
-        ax = fig.add_subplot(111)
-
-    fig.patch.set_facecolor("white")
-    ax.set_facecolor("white")
-
-    meses = df["Mes"].astype(str).tolist()
+    rotulos_legenda = rotulos_legenda or {}
+    hachuras_barras = hachuras_barras or {}
+    series_barras_ativas = list(series_barras_ativas or [])
+    meses = df["Mes"].astype(str).tolist() if "Mes" in df.columns else [str(i + 1) for i in range(len(df))]
     x_indices = np.arange(len(meses))
 
-    todas_series = [
-        ("Bosque", rotulos_legenda.get("Bosque", "Bosque")),
-        ("Desvio_Bosque", rotulos_legenda.get("Desvio_Bosque", "Desvio/p")),
-        ("Estacionamento", rotulos_legenda.get("Estacionamento", "Estacionamento")),
-        ("Desvio_Estacionamento", rotulos_legenda.get("Desvio_Estacionamento", "Desvio/p")),
-    ]
-    series_plot = [(col, lab) for col, lab in todas_series if col in series_barras_ativas and col in df.columns]
+    rotulos_padrao = {
+        "Bosque": "Bosque",
+        "Desvio_Bosque": "Desvio/p",
+        "Estacionamento": "Estacionamento",
+        "Desvio_Estacionamento": "Desvio/p",
+    }
+
+    def _ativa(col):
+        return col in series_barras_ativas and col in df.columns
+
+    # Cada item: (coluna da altura, rótulo da legenda, coluna do erro ou None)
+    if modo_desvio == MODO_DESVIO_BARRAS:
+        series_plot = [
+            (col, rotulos_legenda.get(col, rotulos_padrao[col]), None)
+            for par in PARES_MEDIA_DESVIO
+            for col in par
+            if _ativa(col)
+        ]
+    else:
+        series_plot = [
+            (media, rotulos_legenda.get(media, rotulos_padrao[media]), desvio if _ativa(desvio) else None)
+            for media, desvio in PARES_MEDIA_DESVIO
+            if _ativa(media)
+        ]
 
     n_series = len(series_plot)
+    topos_barras = []
     if n_series > 0 and len(x_indices) > 0:
         largura_barra, offsets = calcular_posicoes_barras(
             n_series=n_series,
@@ -376,47 +468,62 @@ def renderizar_grafico_barras(
             espaco_barras=espaco_barras,
         )
 
-        for idx_s, (col_name, label_leg) in enumerate(series_plot):
-            valores = pd.to_numeric(df[col_name], errors="coerce").fillna(0.0).tolist()
-            posicoes_x = x_indices + offsets[idx_s]
-            cor_b = cores_barras.get(col_name, "#cccccc")
-            hatch_b = hachuras_barras.get(col_name) if hachuras_barras else None
+        for idx_s, (col_name, label_leg, col_erro) in enumerate(series_plot):
+            valores = pd.to_numeric(df[col_name], errors="coerce").to_numpy(dtype=float)
+            erros = (
+                pd.to_numeric(df[col_erro], errors="coerce").fillna(0.0).abs().to_numpy(dtype=float)
+                if col_erro
+                else np.zeros(len(valores))
+            )
+            validos = ~np.isnan(valores)
+            if not validos.any():
+                continue
+
+            posicoes_x = (x_indices + offsets[idx_s])[validos]
+            alturas = valores[validos]
+            erros_validos = erros[validos]
 
             barras = ax.bar(
                 posicoes_x,
-                valores,
+                alturas,
                 width=largura_barra,
                 label=label_leg,
-                color=cor_b,
+                color=cores_barras.get(col_name, "#cccccc"),
                 edgecolor="black",
                 linewidth=0.9,
-                hatch=hatch_b,
+                hatch=hachuras_barras.get(col_name),
+                yerr=erros_validos if col_erro else None,
+                capsize=4 if col_erro else 0,
+                error_kw=dict(elinewidth=1.0, capthick=1.0, ecolor="black", zorder=4),
                 zorder=3,
             )
+            topos_barras.extend((alturas + erros_validos).tolist())
 
             if exibir_valores:
-                for rect, val_orig in zip(barras, df[col_name]):
-                    if pd.notnull(val_orig):
-                        altura = rect.get_height()
-                        txt_val = formatar_numero_ptbr(val_orig, formato_decimais)
-                        ax.annotate(
-                            txt_val,
-                            xy=(rect.get_x() + rect.get_width() / 2.0, altura),
-                            xytext=(0, 2.5),
-                            textcoords="offset points",
-                            ha="center",
-                            va="bottom",
-                            fontsize=tamanho_fonte - 1.2,
-                            fontweight="bold" if negrito_valores else "normal",
-                            color="black",
-                            zorder=4,
-                        )
+                for rect, val, err in zip(barras, alturas, erros_validos):
+                    ax.annotate(
+                        formatar_numero_ptbr(val, formato_decimais),
+                        xy=(rect.get_x() + rect.get_width() / 2.0, rect.get_height() + err),
+                        xytext=(0, 2.5),
+                        textcoords="offset points",
+                        ha="center",
+                        va="bottom",
+                        fontsize=tamanho_fonte - 1.2,
+                        fontweight="bold" if negrito_valores else "normal",
+                        color="black",
+                        zorder=5,
+                    )
 
     ax.set_xticks(x_indices)
     ax.set_xticklabels(meses, fontsize=tamanho_fonte - 0.5)
 
     pad_min = 0.0 if min_y is None else float(min_y)
-    pad_max = 35.0 if max_y is None else float(max_y)
+    if max_y is not None:
+        pad_max = float(max_y)
+    elif topos_barras:
+        pad_max = float(np.ceil(max(topos_barras) * 1.15))
+    else:
+        pad_max = 35.0
     if pad_max <= pad_min:
         pad_max = pad_min + 10.0
     ax.set_ylim(pad_min, pad_max)
@@ -424,116 +531,37 @@ def renderizar_grafico_barras(
     if len(x_indices) > 0:
         ax.set_xlim(-0.5, len(x_indices) - 0.5)
 
-    cor_borda = bordas_config.get("cor", "black")
-    esp_borda = bordas_config.get("espessura", 1.0)
-
-    ax.spines["top"].set_visible(bordas_config.get("topo", True))
-    ax.spines["right"].set_visible(bordas_config.get("direita", True))
-    ax.spines["bottom"].set_visible(bordas_config.get("baixo", True))
-    ax.spines["left"].set_visible(bordas_config.get("esquerda", True))
-
-    for s_name in ["top", "right", "bottom", "left"]:
-        ax.spines[s_name].set_color(cor_borda)
-        ax.spines[s_name].set_linewidth(esp_borda)
-
-    direcao_t = ticks_config.get("direcao", "out")
-    ticks_topo = ticks_config.get("topo", False) and bordas_config.get("topo", True)
-    ticks_dir = ticks_config.get("direita", False) and bordas_config.get("direita", True)
-    ticks_baixo = ticks_config.get("baixo", True) and bordas_config.get("baixo", True)
-    ticks_esq = ticks_config.get("esquerda", True) and bordas_config.get("esquerda", True)
-
-    ax.tick_params(
-        which="major",
-        direction=direcao_t,
-        top=ticks_topo,
-        right=ticks_dir,
-        bottom=ticks_baixo,
-        left=ticks_esq,
-        length=5.0,
-        width=1.0,
-        color=cor_borda,
-        labelsize=tamanho_fonte - 0.5,
-    )
+    _aplicar_bordas(ax, bordas_config)
 
     passo_maior_y = calcular_passo_ticks_y(pad_min, pad_max, ticks_config.get("intervalo_y", 0.0))
     ax.yaxis.set_major_locator(ticker.MultipleLocator(passo_maior_y))
+    ax.yaxis.set_major_formatter(ticker.FuncFormatter(_formatar_tick_ptbr))
+    subdivisoes = 5 if (passo_maior_y >= 5.0 and passo_maior_y % 5 == 0) else 2
+    _aplicar_ticks(
+        ax, ticks_config, bordas_config, tamanho_fonte,
+        direcao_padrao="out",
+        lados_padrao={"topo": False, "direita": False, "baixo": True, "esquerda": True},
+        locator_menor_x=ticker.FixedLocator(np.arange(-0.5, len(x_indices) + 0.5, 1.0)) if len(x_indices) else None,
+        locator_menor_y=ticker.AutoMinorLocator(subdivisoes),
+    )
 
-    if ticks_config.get("minor_ticks", True):
-        if len(x_indices) > 0:
-            ax.xaxis.set_minor_locator(ticker.FixedLocator(np.arange(-0.5, len(x_indices) + 0.5, 1.0)))
-        subdivisoes = 5 if (passo_maior_y >= 5.0 and passo_maior_y % 5 == 0) else 2
-        ax.yaxis.set_minor_locator(ticker.AutoMinorLocator(subdivisoes))
-        ax.tick_params(
-            which="minor",
-            direction=direcao_t,
-            top=ticks_topo,
-            right=ticks_dir,
-            bottom=ticks_baixo,
-            left=ticks_esq,
-            length=2.8,
-            width=0.8,
-            color=cor_borda,
-        )
-    else:
-        ax.xaxis.set_minor_locator(ticker.NullLocator())
-        ax.yaxis.set_minor_locator(ticker.NullLocator())
-
-    ax.set_axisbelow(True)
-    if exibir_grade:
-        ax.grid(
-            True,
-            which="major",
-            axis="y",
-            color="#cbd5e1",
-            linestyle="--",
-            linewidth=0.85,
-            alpha=0.85,
-            zorder=0,
-        )
-    else:
-        ax.grid(False)
-
-    ax.set_xlabel(rotulo_x, fontsize=tamanho_fonte + 0.5, color="black", labelpad=8)
-    ax.set_ylabel(rotulo_y, fontsize=tamanho_fonte, color="black", labelpad=8)
-
-    if titulo_grafico and titulo_grafico.strip():
-        pad_val = 12 if bordas_config.get("topo", True) else 22
-        ax.set_title(titulo_grafico, fontsize=tamanho_fonte + 1.5, color="black", pad=pad_val, fontweight="normal")
+    _aplicar_grade(ax, exibir_grade, "y")
+    _aplicar_titulo_e_rotulos(ax, titulo_grafico, rotulo_x, rotulo_y, tamanho_fonte, bordas_config, delta_fonte_x=0.5)
 
     if legenda_config.get("exibir", True) and n_series > 0:
-        pos_x = legenda_config.get("pos_x", 0.98)
-        pos_y = legenda_config.get("pos_y", 0.98)
-        loc_ancora = legenda_config.get("loc", "upper right")
-        ncol_leg = n_series if legenda_config.get("orientacao") == "Horizontal" else 1
-        moldura_leg = legenda_config.get("moldura", True)
-
-        leg = ax.legend(
-            loc=loc_ancora,
-            bbox_to_anchor=(pos_x, pos_y),
-            ncol=ncol_leg,
-            frameon=moldura_leg,
-            edgecolor="black" if moldura_leg else "none",
-            facecolor="white",
-            framealpha=1.0,
-            fontsize=tamanho_fonte - 2.0,
-            handlelength=1.8,
-            handleheight=1.1,
-            handletextpad=0.5,
-            borderpad=0.45,
-            labelspacing=0.35,
-            columnspacing=1.2,
+        _criar_legenda(
+            ax, legenda_config, n_series, tamanho_fonte,
+            reducao_fonte=2.0, handlelength=1.8, handleheight=1.1, handletextpad=0.5,
+            borderpad=0.45, labelspacing=0.35, columnspacing=1.2,
         )
-        if moldura_leg:
-            leg.get_frame().set_linewidth(0.9)
-            leg.set_zorder(10)
-        try:
-            leg.set_draggable(True)
-        except Exception:
-            pass
 
     fig.tight_layout()
     return fig
 
+
+# =======================================================================
+# Gráfico de Dispersão e Regressão
+# =======================================================================
 
 def renderizar_grafico_dispersao(
     df: pd.DataFrame,
@@ -571,19 +599,11 @@ def renderizar_grafico_dispersao(
     """
     Renderiza o Gráfico de Dispersão com Regressão Linear e indicador R²
     no padrão acadêmico OriginLab / ABNT.
+    A banda opcional é o intervalo de confiança de 95% da reta ajustada (distribuição t, n−2 g.l.).
     """
     configurar_fonte_matplotlib(fonte_nome)
+    fig, ax = _preparar_figura(fig, (7.4, 4.6))
 
-    if fig is None:
-        fig, ax = plt.subplots(figsize=(7.4, 4.6), dpi=200)
-    else:
-        fig.clear()
-        ax = fig.add_subplot(111)
-
-    fig.patch.set_facecolor("white")
-    ax.set_facecolor("white")
-
-    # Extrai colunas X e Y
     col_x = "X" if "X" in df.columns else (df.columns[1] if len(df.columns) > 1 else df.columns[0])
     col_y = "Y" if "Y" in df.columns else (df.columns[2] if len(df.columns) > 2 else df.columns[-1])
     col_ponto = "Ponto" if "Ponto" in df.columns else df.columns[0]
@@ -595,34 +615,25 @@ def renderizar_grafico_dispersao(
     y_valid = s_y[mask].to_numpy(dtype=float)
     pontos_valid = df.loc[mask, col_ponto].astype(str).tolist() if col_ponto in df.columns else []
 
-    # Cálculos de limites automáticos se não fornecidos
-    if len(x_valid) > 0:
-        real_min_x, real_max_x = float(np.min(x_valid)), float(np.max(x_valid))
-        delta_x = real_max_x - real_min_x or 1.0
-        pad_min_x = (real_min_x - 0.05 * delta_x) if min_x is None else float(min_x)
-        pad_max_x = (real_max_x + 0.05 * delta_x) if max_x is None else float(max_x)
-    else:
-        pad_min_x = 0.0 if min_x is None else float(min_x)
-        pad_max_x = 10.0 if max_x is None else float(max_x)
+    def _limites(valores, vmin_cfg, vmax_cfg):
+        if len(valores) > 0:
+            real_min, real_max = float(np.min(valores)), float(np.max(valores))
+            delta = real_max - real_min or 1.0
+            lo = (real_min - 0.05 * delta) if vmin_cfg is None else float(vmin_cfg)
+            hi = (real_max + 0.05 * delta) if vmax_cfg is None else float(vmax_cfg)
+        else:
+            lo = 0.0 if vmin_cfg is None else float(vmin_cfg)
+            hi = 10.0 if vmax_cfg is None else float(vmax_cfg)
+        if hi <= lo:
+            hi = lo + 1.0
+        return lo, hi
 
-    if len(y_valid) > 0:
-        real_min_y, real_max_y = float(np.min(y_valid)), float(np.max(y_valid))
-        delta_y = real_max_y - real_min_y or 1.0
-        pad_min_y = (real_min_y - 0.05 * delta_y) if min_y is None else float(min_y)
-        pad_max_y = (real_max_y + 0.05 * delta_y) if max_y is None else float(max_y)
-    else:
-        pad_min_y = 0.0 if min_y is None else float(min_y)
-        pad_max_y = 10.0 if max_y is None else float(max_y)
-
-    if pad_max_x <= pad_min_x:
-        pad_max_x = pad_min_x + 1.0
-    if pad_max_y <= pad_min_y:
-        pad_max_y = pad_min_y + 1.0
-
+    pad_min_x, pad_max_x = _limites(x_valid, min_x, max_x)
+    pad_min_y, pad_max_y = _limites(y_valid, min_y, max_y)
     ax.set_xlim(pad_min_x, pad_max_x)
     ax.set_ylim(pad_min_y, pad_max_y)
 
-    # 1. Plot dos Pontos de Dispersão
+    # 1. Pontos
     m_sym = marcador_pontos if marcador_pontos and marcador_pontos != "None" else "o"
     tamanho_scatter = (float(tamanho_pontos) * 2.8) ** 2 / 10.0
 
@@ -653,11 +664,9 @@ def renderizar_grafico_dispersao(
 
     # 2. Regressão Linear Simples e R²
     reg = calcular_regressao_linear(x_valid, y_valid)
-    if reg and len(x_valid) >= 2:
+    if reg:
         slope = reg["slope"]
         intercept = reg["intercept"]
-        r2 = reg["r2"]
-        se = reg["se"]
 
         x_line = np.linspace(np.min(x_valid), np.max(x_valid), 100)
         y_line = slope * x_line + intercept
@@ -673,16 +682,19 @@ def renderizar_grafico_dispersao(
                 label=f"Tendência (R² = {reg['r2_formatado']})",
             )
 
-            if exibir_banda and se > 0:
-                ax.fill_between(
-                    x_line,
-                    y_line - 1.96 * se,
-                    y_line + 1.96 * se,
-                    color=cor_reta,
-                    alpha=0.15,
-                    zorder=2,
-                    label="IC 95%",
-                )
+            if exibir_banda:
+                banda = calcular_banda_regressao(reg, x_line, nivel=0.95)
+                if banda is not None:
+                    inferior, superior = banda
+                    ax.fill_between(
+                        x_line,
+                        inferior,
+                        superior,
+                        color=cor_reta,
+                        alpha=0.15,
+                        zorder=2,
+                        label="IC 95% da reta",
+                    )
 
         # 3. Rótulo de R² e Equação
         texto_linhas = []
@@ -693,171 +705,60 @@ def renderizar_grafico_dispersao(
 
         if texto_linhas:
             full_txt = "\n".join(texto_linhas)
-            if "Superior Direito" in posicao_r2:
-                ax.text(
-                    0.96,
-                    0.94,
-                    full_txt,
-                    transform=ax.transAxes,
-                    fontsize=tamanho_fonte - 0.5,
-                    color="#222222",
-                    ha="right",
-                    va="top",
-                    bbox=dict(boxstyle="round,pad=0.4", facecolor="white", edgecolor="#cbd5e1", alpha=0.9),
-                    zorder=6,
-                )
-            elif "Superior Esquerdo" in posicao_r2:
-                ax.text(
-                    0.05,
-                    0.94,
-                    full_txt,
-                    transform=ax.transAxes,
-                    fontsize=tamanho_fonte - 0.5,
-                    color="#222222",
-                    ha="left",
-                    va="top",
-                    bbox=dict(boxstyle="round,pad=0.4", facecolor="white", edgecolor="#cbd5e1", alpha=0.9),
-                    zorder=6,
-                )
-            elif "Inferior Direito" in posicao_r2:
-                ax.text(
-                    0.96,
-                    0.06,
-                    full_txt,
-                    transform=ax.transAxes,
-                    fontsize=tamanho_fonte - 0.5,
-                    color="#222222",
-                    ha="right",
-                    va="bottom",
-                    bbox=dict(boxstyle="round,pad=0.4", facecolor="white", edgecolor="#cbd5e1", alpha=0.9),
-                    zorder=6,
-                )
+            caixa = dict(boxstyle="round,pad=0.4", facecolor="white", edgecolor=COR_GRADE, alpha=0.9)
+            posicoes_fixas = {
+                "Superior Direito": (0.96, 0.94, "right", "top"),
+                "Superior Esquerdo": (0.05, 0.94, "left", "top"),
+                "Inferior Direito": (0.96, 0.06, "right", "bottom"),
+            }
+            fixa = next((v for k, v in posicoes_fixas.items() if k in posicao_r2), None)
+            if fixa:
+                px, py, ha, va = fixa
+                ax.text(px, py, full_txt, transform=ax.transAxes, fontsize=tamanho_fonte - 0.5,
+                        color="#222222", ha=ha, va=va, bbox=caixa, zorder=6)
             else:
-                # Padrão: Junto à reta (próximo ao topo da reta)
+                # Padrão: junto à reta (próximo ao topo da reta)
                 x_pos = np.min(x_valid) + 0.72 * (np.max(x_valid) - np.min(x_valid))
                 y_pos = slope * x_pos + intercept + 0.035 * (pad_max_y - pad_min_y)
-                ax.text(
-                    x_pos,
-                    y_pos,
-                    full_txt,
-                    fontsize=tamanho_fonte - 0.5,
-                    color="#222222",
-                    ha="center",
-                    va="bottom",
-                    zorder=6,
-                )
+                ax.text(x_pos, y_pos, full_txt, fontsize=tamanho_fonte - 0.5,
+                        color="#222222", ha="center", va="bottom", zorder=6)
 
-    # 4. Configuração de Borda e Spines
-    cor_borda = bordas_config.get("cor", "black")
-    esp_borda = bordas_config.get("espessura", 1.0)
-    for s_name in ["top", "right", "bottom", "left"]:
-        ax.spines[s_name].set_visible(bordas_config.get(s_name if s_name != "baixo" else "baixo", True))
-        ax.spines[s_name].set_color(cor_borda)
-        ax.spines[s_name].set_linewidth(esp_borda)
-
-    # 5. Configuração dos Ticks
-    direcao_t = ticks_config.get("direcao", "in")
-    ticks_topo = ticks_config.get("topo", True) and bordas_config.get("topo", True)
-    ticks_dir = ticks_config.get("direita", True) and bordas_config.get("direita", True)
-    ticks_baixo = ticks_config.get("baixo", True) and bordas_config.get("baixo", True)
-    ticks_esq = ticks_config.get("esquerda", True) and bordas_config.get("esquerda", True)
-
-    ax.tick_params(
-        which="major",
-        direction=direcao_t,
-        top=ticks_topo,
-        right=ticks_dir,
-        bottom=ticks_baixo,
-        left=ticks_esq,
-        length=5.0,
-        width=1.0,
-        color=cor_borda,
-        labelsize=tamanho_fonte - 0.5,
-    )
+    # 4. Bordas, ticks e grade
+    _aplicar_bordas(ax, bordas_config)
 
     passo_x = calcular_passo_ticks_y(pad_min_x, pad_max_x, intervalo_ticks_x)
     passo_y = calcular_passo_ticks_y(pad_min_y, pad_max_y, intervalo_ticks_y)
     ax.xaxis.set_major_locator(ticker.MultipleLocator(passo_x))
     ax.yaxis.set_major_locator(ticker.MultipleLocator(passo_y))
+    ax.xaxis.set_major_formatter(ticker.FuncFormatter(_formatar_tick_ptbr))
+    ax.yaxis.set_major_formatter(ticker.FuncFormatter(_formatar_tick_ptbr))
+    _aplicar_ticks(
+        ax, ticks_config, bordas_config, tamanho_fonte,
+        direcao_padrao="in",
+        lados_padrao={"topo": True, "direita": True, "baixo": True, "esquerda": True},
+        locator_menor_x=ticker.AutoMinorLocator(2),
+        locator_menor_y=ticker.AutoMinorLocator(2),
+    )
 
-    def _fmt_ptbr(val, pos):
-        if abs(val - round(val)) < 1e-6:
-            return f"{int(round(val))}"
-        txt = f"{val:.2f}".rstrip("0").rstrip(".")
-        return txt.replace(".", ",")
-
-    ax.xaxis.set_major_formatter(ticker.FuncFormatter(_fmt_ptbr))
-    ax.yaxis.set_major_formatter(ticker.FuncFormatter(_fmt_ptbr))
-
-    if ticks_config.get("minor_ticks", True):
-        ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(2))
-        ax.yaxis.set_minor_locator(ticker.AutoMinorLocator(2))
-        ax.tick_params(
-            which="minor",
-            direction=direcao_t,
-            top=ticks_topo,
-            right=ticks_dir,
-            bottom=ticks_baixo,
-            left=ticks_esq,
-            length=2.8,
-            width=0.8,
-            color=cor_borda,
-        )
-    else:
-        ax.xaxis.set_minor_locator(ticker.NullLocator())
-        ax.yaxis.set_minor_locator(ticker.NullLocator())
-
-    ax.set_axisbelow(True)
-    if exibir_grade:
-        ax.grid(
-            True,
-            which="major",
-            axis="both",
-            color="#cbd5e1",
-            linestyle="--",
-            linewidth=0.85,
-            alpha=0.85,
-            zorder=0,
-        )
-    else:
-        ax.grid(False)
-
-    ax.set_xlabel(rotulo_x, fontsize=tamanho_fonte, color="black", labelpad=8)
-    ax.set_ylabel(rotulo_y, fontsize=tamanho_fonte, color="black", labelpad=8)
-
-    if titulo_grafico and titulo_grafico.strip():
-        pad_val = 12 if bordas_config.get("topo", True) else 22
-        ax.set_title(titulo_grafico, fontsize=tamanho_fonte + 1.5, color="black", pad=pad_val, fontweight="normal")
+    _aplicar_grade(ax, exibir_grade, "both")
+    _aplicar_titulo_e_rotulos(ax, titulo_grafico, rotulo_x, rotulo_y, tamanho_fonte, bordas_config)
 
     if legenda_config.get("exibir", False):
-        pos_x = legenda_config.get("pos_x", 0.98)
-        pos_y = legenda_config.get("pos_y", 0.98)
-        loc_ancora = legenda_config.get("loc", "upper right")
-        moldura_leg = legenda_config.get("moldura", True)
-
-        leg = ax.legend(
-            loc=loc_ancora,
-            bbox_to_anchor=(pos_x, pos_y),
-            frameon=moldura_leg,
-            edgecolor="black" if moldura_leg else "none",
-            facecolor="white",
-            framealpha=1.0,
-            fontsize=tamanho_fonte - 1.5,
-            handlelength=2.0,
-            handletextpad=0.5,
-            borderpad=0.45,
+        legenda_scatter = dict(legenda_config, orientacao="Vertical")
+        _criar_legenda(
+            ax, legenda_scatter, 1, tamanho_fonte,
+            handlelength=2.0, handletextpad=0.5, borderpad=0.45,
         )
-        if moldura_leg:
-            leg.get_frame().set_linewidth(0.9)
-            leg.set_zorder(10)
-        try:
-            leg.set_draggable(True)
-        except Exception:
-            pass
 
     fig.tight_layout()
     return fig
 
+
+# =======================================================================
+# Boxplot
+# =======================================================================
+
+COLUNAS_IDENTIFICADORAS = ["ponto", "pontos", "mes", "mês", "id"]
 
 
 def renderizar_grafico_boxplot(
@@ -881,26 +782,25 @@ def renderizar_grafico_boxplot(
     mostrar_pontos: bool = False,
     intervalo_ticks_y: float = 0.0,
     fig=None,
+    series_controladas: list = None,
 ):
     """
     Renderiza o Gráfico de Boxplot (Distribuição Térmica, Mediana, Quartis Q1/Q3 e Outliers)
     no padrão editorial OriginLab Pro / Nature.
+
+    series_controladas: colunas que possuem um seletor de visibilidade na interface; essas só
+    aparecem se estiverem em series_ativas. Colunas sem seletor sempre aparecem.
+    Se series_controladas for None, todas as colunas obedecem a series_ativas (vazio = todas).
     """
     configurar_fonte_matplotlib(fonte_nome)
+    fig, ax = _preparar_figura(fig, (7.4, 4.6))
 
-    if fig is None:
-        fig, ax = plt.subplots(figsize=(7.4, 4.6), dpi=200)
+    series_ativas = list(series_ativas or [])
+    candidatas = [c for c in df.columns if str(c).lower() not in COLUNAS_IDENTIFICADORAS]
+    if series_controladas is None:
+        cols_plot = [c for c in candidatas if not series_ativas or c in series_ativas]
     else:
-        fig.clear()
-        ax = fig.add_subplot(111)
-
-    fig.patch.set_facecolor("white")
-    ax.set_facecolor("white")
-
-    candidatas = [c for c in df.columns if c.lower() not in ["ponto", "pontos", "mes", "mês", "id"]]
-    cols_plot = [c for c in candidatas if c in series_ativas]
-    if not cols_plot:
-        cols_plot = candidatas if candidatas else list(df.columns)
+        cols_plot = [c for c in candidatas if c not in series_controladas or c in series_ativas]
 
     dados_plot = []
     labels_plot = []
@@ -931,72 +831,44 @@ def renderizar_grafico_boxplot(
             zorder=3
         )
 
-        for idx, (patch, col_name) in enumerate(zip(bp["boxes"], labels_plot)):
-            cor = cores_series.get(col_name, "#3b82f6")
-            patch.set_facecolor(cor)
+        for patch, col_name in zip(bp["boxes"], labels_plot):
+            patch.set_facecolor(cores_series.get(col_name, "#3b82f6"))
             patch.set_edgecolor("black")
             patch.set_linewidth(1.1)
 
         if mostrar_pontos:
+            # Semente fixa: os pontos não "pulam" a cada redesenho e a figura exportada é reprodutível
+            rng = np.random.default_rng(0)
             for idx, s in enumerate(dados_plot):
-                jitter = np.random.normal(0, 0.04, size=len(s))
+                jitter = rng.normal(0, 0.04, size=len(s))
                 ax.scatter(posicoes[idx] + jitter, s, color="#222222", alpha=0.5, s=20, zorder=4, edgecolor="none")
 
         ax.set_xticks(posicoes)
         ax.set_xticklabels(labels_plot, fontsize=tamanho_fonte - 0.5)
         ax.set_xlim(-0.6, n_boxes - 0.4)
     else:
-        ax.text(0.5, 0.5, "Sem dados suficientes para gerar Boxplot", ha="center", va="center", transform=ax.transAxes)
+        msg = "Nenhuma série selecionada" if candidatas else "Sem dados suficientes para gerar Boxplot"
+        ax.text(0.5, 0.5, msg, ha="center", va="center", transform=ax.transAxes)
 
-    if todos_valores:
-        vmin = min(todos_valores)
-        vmax = max(todos_valores)
-        margem = (vmax - vmin) * 0.12 if vmax > vmin else 2.0
-        pad_min = (float(min_y) if min_y is not None else (int((vmin - margem) // 2) * 2))
-        pad_max = (float(max_y) if max_y is not None else (int(np.ceil((vmax + margem) / 2)) * 2))
-        if pad_max <= pad_min:
-            pad_max = pad_min + 5.0
-        ax.set_ylim(pad_min, pad_max)
-    elif min_y is not None and max_y is not None:
-        ax.set_ylim(float(min_y), max(float(max_y), float(min_y) + 5.0))
-        pad_min, pad_max = float(min_y), float(max_y)
-    else:
-        pad_min, pad_max = 0.0, 35.0
-        ax.set_ylim(pad_min, pad_max)
+    pad_min, pad_max = _limites_automaticos(todos_valores, min_y, max_y, margem_relativa=0.12)
+    ax.set_ylim(pad_min, pad_max)
 
     passo_y = calcular_passo_ticks_y(pad_min, pad_max, intervalo_ticks_y)
     ax.yaxis.set_major_locator(ticker.MultipleLocator(passo_y))
+    ax.yaxis.set_major_formatter(ticker.FuncFormatter(_formatar_tick_ptbr))
 
-    cor_borda = bordas_config.get("cor", "black")
-    esp_borda = bordas_config.get("espessura", 1.0)
-    for s_name in ["top", "right", "bottom", "left"]:
-        ax.spines[s_name].set_visible(bordas_config.get(s_name if s_name != "bottom" else "baixo", True))
-        ax.spines[s_name].set_color(cor_borda)
-        ax.spines[s_name].set_linewidth(esp_borda)
-
-    direcao_t = ticks_config.get("direcao", "out")
-    ax.tick_params(
-        which="major", direction=direcao_t,
-        top=ticks_config.get("topo", False), right=ticks_config.get("direita", False),
-        bottom=ticks_config.get("baixo", True), left=ticks_config.get("esquerda", True),
-        length=5.0, width=1.0, color=cor_borda, labelsize=tamanho_fonte - 0.5
+    _aplicar_bordas(ax, bordas_config)
+    _aplicar_ticks(
+        ax, ticks_config, bordas_config, tamanho_fonte,
+        direcao_padrao="out",
+        lados_padrao={"topo": False, "direita": False, "baixo": True, "esquerda": True},
+        locator_menor_y=ticker.AutoMinorLocator(2),
     )
+    # Eixo X categórico: sem ticks menores entre as caixas
+    ax.xaxis.set_minor_locator(ticker.NullLocator())
 
-    if ticks_config.get("minor_ticks", True):
-        ax.yaxis.set_minor_locator(ticker.AutoMinorLocator(2))
-        ax.tick_params(which="minor", direction=direcao_t, length=2.8, width=0.8, color=cor_borda)
-
-    if exibir_grade:
-        ax.grid(True, axis="y", color="#e0e0e0", linestyle="--", linewidth=0.6, zorder=0)
-    else:
-        ax.grid(False)
-
-    ax.set_xlabel(rotulo_x, fontsize=tamanho_fonte + 0.5, color="black", labelpad=8)
-    ax.set_ylabel(rotulo_y, fontsize=tamanho_fonte, color="black", labelpad=8)
-
-    if titulo_grafico and titulo_grafico.strip():
-        pad_val = 12 if bordas_config.get("topo", True) else 22
-        ax.set_title(titulo_grafico, fontsize=tamanho_fonte + 1.5, color="black", pad=pad_val, fontweight="normal")
+    _aplicar_grade(ax, exibir_grade, "y")
+    _aplicar_titulo_e_rotulos(ax, titulo_grafico, rotulo_x, rotulo_y, tamanho_fonte, bordas_config, delta_fonte_x=0.5)
 
     fig.tight_layout()
     return fig

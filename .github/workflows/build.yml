@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       publish_release:
-        description: "Publicar Release no GitHub?"
+        description: "Publicar Release no GitHub (usa a versão do version.json)?"
         required: true
         type: boolean
         default: false
@@ -19,13 +19,16 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   test:
-    name: Suíte de Testes (unittest / pytest)
+    name: Lint e Suíte de Testes
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.versao.outputs.version }}
+      status: ${{ steps.versao.outputs.status }}
     steps:
       - name: Obter Código
         uses: actions/checkout@v4
@@ -38,18 +41,40 @@ jobs:
       - name: Instalar Dependências
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest
+          pip install -r requirements-dev.txt
+
+      - name: Ler versão (version.json)
+        id: versao
+        run: |
+          python - <<'EOF' >> "$GITHUB_OUTPUT"
+          import json
+          v = json.load(open("version.json", encoding="utf-8"))
+          print(f"version={v['version']}")
+          print(f"status={v.get('status', '')}")
+          EOF
+
+      - name: Conferir tag x version.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          if [ "${GITHUB_REF_NAME}" != "v${{ steps.versao.outputs.version }}" ]; then
+            echo "::error::A tag ${GITHUB_REF_NAME} não corresponde ao version.json (v${{ steps.versao.outputs.version }})."
+            exit 1
+          fi
+
+      - name: Lint (ruff)
+        run: ruff check .
 
       - name: Executar Testes
-        run: |
-          python -m unittest tests/test_all.py
+        env:
+          QT_QPA_PLATFORM: offscreen
+          MPLBACKEND: Agg
+        run: python -m pytest tests -q
 
   build-windows:
     name: Compilar Executável Windows (x64)
     needs: test
     runs-on: windows-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Obter Código
         uses: actions/checkout@v4
@@ -62,8 +87,7 @@ jobs:
       - name: Instalar Dependências
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller
+          pip install -r requirements-dev.txt
 
       - name: Compilar com PyInstaller
         shell: pwsh
@@ -73,6 +97,7 @@ jobs:
             --icon "assets/app_icon.ico" `
             --add-data "assets;assets" `
             --add-data "config;config" `
+            --add-data "version.json;." `
             main.py
 
       - name: Compactar Pacote Windows
@@ -86,11 +111,21 @@ jobs:
           name: VesperaSci-Windows-x64
           path: dist/VesperaSci-Windows-x64.zip
 
-  build-macos-arm:
-    name: Compilar macOS Apple Silicon (.dmg / M1/M2/M3/M4)
+  build-macos:
+    name: Compilar macOS ${{ matrix.rotulo }}
     needs: test
-    runs-on: macos-14
-    timeout-minutes: 10
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            rotulo: Apple Silicon (arm64)
+            artefato: VesperaSci-macOS-AppleSilicon-arm64
+          - runner: macos-15-intel
+            rotulo: Intel (x86_64)
+            artefato: VesperaSci-macOS-Intel-x86_64
     steps:
       - name: Obter Código
         uses: actions/checkout@v4
@@ -103,8 +138,7 @@ jobs:
       - name: Instalar Dependências
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller pillow
+          pip install -r requirements-dev.txt pillow
 
       - name: Gerar Ícone ICNS do macOS
         run: |
@@ -128,6 +162,7 @@ jobs:
             --icon "assets/app_icon.icns" \
             --add-data "assets:assets" \
             --add-data "config:config" \
+            --add-data "version.json:." \
             --osx-bundle-identifier "com.vesperasci.app" \
             main.py
 
@@ -136,23 +171,26 @@ jobs:
           mkdir -p dmg_root
           cp -r dist/VesperaSci.app dmg_root/
           ln -s /Applications dmg_root/Applications
-          hdiutil create -volname "Vespera Sci" -srcfolder dmg_root -ov -format UDZO dist/VesperaSci-macOS-AppleSilicon-arm64.dmg
+          hdiutil create -volname "Vespera Sci" -srcfolder dmg_root -ov -format UDZO "dist/${{ matrix.artefato }}.dmg"
           rm -rf dmg_root
 
-      - name: Armazenar Artefato macOS Apple Silicon
+      - name: Armazenar Artefato macOS
         uses: actions/upload-artifact@v4
         with:
-          name: VesperaSci-macOS-AppleSilicon-arm64
-          path: dist/VesperaSci-macOS-AppleSilicon-arm64.dmg
+          name: ${{ matrix.artefato }}
+          path: dist/${{ matrix.artefato }}.dmg
 
   publish-release:
     name: Publicar Release Oficial no GitHub
     if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && inputs.publish_release == true)
-    needs: [build-windows, build-macos-arm]
+    needs: [test, build-windows, build-macos]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: write
+    env:
+      TAG: v${{ needs.test.outputs.version }}
+      TITULO: Vespera Sci v${{ needs.test.outputs.version }}${{ needs.test.outputs.status && format(' ({0})', needs.test.outputs.status) || '' }}
     steps:
       - name: Baixar todos os artefatos compilados
         uses: actions/download-artifact@v4
@@ -162,34 +200,30 @@ jobs:
       - name: Publicar Release no GitHub
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v1.0.0' }}
-          name: "Vespera Sci v1.0.0 (Beta)"
+          tag_name: ${{ env.TAG }}
+          name: ${{ env.TITULO }}
           draft: false
+          # Releases marcadas como prerelease não aparecem em /releases/latest, que é o que o
+          # atualizador do app consulta. O status Beta vai no título.
           prerelease: false
           make_latest: true
           body: |
-            ## Vespera Sci v1.0.0 (Beta) — Estúdio Científico de Dados e Gráficos
+            ## ${{ env.TITULO }} — Estúdio Científico de Dados e Gráficos
 
-            Primeira versão pública do **Vespera Sci Desktop**, desenvolvida para geração de gráficos científicos e relatórios analíticos nos padrões acadêmicos internacionais e ABNT.
+            Ferramenta desktop para geração de gráficos científicos e relatórios analíticos nos padrões acadêmicos internacionais e ABNT.
 
             ### Instaladores Disponíveis para Download:
-            * **Windows (64-bit)**: [`VesperaSci-Windows-x64.zip`](https://github.com/${{ github.repository }}/releases/download/v1.0.0/VesperaSci-Windows-x64.zip) (Extraia o arquivo .zip e execute o `VesperaSci.exe`)
-            * **macOS Apple Silicon (M1/M2/M3/M4)**: [`VesperaSci-macOS-AppleSilicon-arm64.dmg`](https://github.com/${{ github.repository }}/releases/download/v1.0.0/VesperaSci-macOS-AppleSilicon-arm64.dmg) (macOS 13 Ventura ou superior)
+            * **Windows (64-bit)**: [`VesperaSci-Windows-x64.zip`](https://github.com/${{ github.repository }}/releases/download/${{ env.TAG }}/VesperaSci-Windows-x64.zip) (Extraia o arquivo .zip e execute o `VesperaSci.exe`)
+            * **macOS Apple Silicon (M1/M2/M3/M4)**: [`VesperaSci-macOS-AppleSilicon-arm64.dmg`](https://github.com/${{ github.repository }}/releases/download/${{ env.TAG }}/VesperaSci-macOS-AppleSilicon-arm64.dmg)
+            * **macOS Intel (x86_64)**: [`VesperaSci-macOS-Intel-x86_64.dmg`](https://github.com/${{ github.repository }}/releases/download/${{ env.TAG }}/VesperaSci-macOS-Intel-x86_64.dmg)
+
+            Cada arquivo tem seu SHA-256 publicado pelo GitHub; o atualizador do app confere esse hash antes de instalar.
 
             ---
             ### Instruções de Instalação no macOS:
             1. Abra o arquivo `.dmg` baixado e arraste o **Vespera Sci** para a pasta **Applications**.
             2. Na primeira inicialização, clique com o **botão direito > Abrir** (ou acesse *Ajustes do Sistema > Privacidade e Segurança > Abrir Mesmo Assim*).
-
-            ---
-            ### Destaques desta Versão:
-            - **Gráficos de Linhas e Séries**: Séries temporais térmicas completas (Manhã, Tarde, Noite).
-            - **Gráficos de Barras com Desvio**: Médias e desvios padrão amostrais com padrões OriginLab hachurados.
-            - **Dispersão e Regressão Linear**: Ajuste de reta com cálculo do coeficiente de determinação (R²), correlação de Pearson e erro padrão.
-            - **Boxplot e Distribuição Térmica**: Quartis Q1/Q3, Mediana, Whiskers (1,5 × IQR), médias e detecção de outliers.
-            - **Colagem Direta**: Suporte a atalho Ctrl+V diretamente sobre o grid de células.
-            - **Histórico Completo**: Desfazer e Refazer (Ctrl+Z / Ctrl+Y) com retenção de até 60 estados.
-            - **Exportação Multiformato**: PNG em alta resolução (300 DPI), Vetor PDF, Vetor SVG e planilhas nativas do Microsoft Excel (.xlsx).
           files: |
             release_assets/VesperaSci-Windows-x64/*
             release_assets/VesperaSci-macOS-AppleSilicon-arm64/*
+            release_assets/VesperaSci-macOS-Intel-x86_64/*

@@ -5,6 +5,7 @@ eliminação total de emojis e barras responsivas sem cortes horizontais.
 """
 
 import json
+import logging
 import os
 import numpy as np
 import pandas as pd
@@ -31,11 +32,11 @@ from config.presets import PRESETS_BARRAS, PRESETS_BOXPLOT, PRESETS_DISPERSAO, P
 from config.themes import DEFAULT_CONFIG
 from core.excel_exporter import (
     gerar_excel_barras_bytes,
-    gerar_excel_boxplot_bytes,
     gerar_excel_dispersao_bytes,
     gerar_excel_linhas_bytes,
 )
 from core.plot_engine import (
+    MODO_DESVIO_ERRO,
     renderizar_grafico_barras,
     renderizar_grafico_boxplot,
     renderizar_grafico_dispersao,
@@ -47,6 +48,8 @@ from ui.icons import get_icon
 from ui.plot_canvas_widget import PlotCanvasWidget
 from ui.sidebar_controls import SidebarControlsWidget
 from ui.styles import THEME_DARK, THEME_LIGHT, build_qss
+
+logger = logging.getLogger(__name__)
 
 
 class VesperaMainWindow(QMainWindow):
@@ -93,7 +96,7 @@ class VesperaMainWindow(QMainWindow):
             self.settings.setValue("geometry", self.saveGeometry())
             self.settings.setValue("theme", self.tema_atual)
         except Exception:
-            pass
+            logger.exception("Falha ao salvar preferências da janela")
         super().closeEvent(event)
 
     def _apply_theme(self):
@@ -925,6 +928,7 @@ class VesperaMainWindow(QMainWindow):
                 marcadores_map=marcadores_map,
                 rotulos_legenda=rotulos_legenda,
                 tamanho_marcador=tamanho_marcador,
+                marcadores_vazados="Monocromático" in cfg.get("opcao_paleta", ""),
             )
         elif self.tipo_grafico_atual == "dispersao":
             cores_disp = self.sidebar.obter_cores_dispersao_ativas()
@@ -984,6 +988,7 @@ class VesperaMainWindow(QMainWindow):
                 mostrar_pontos=cfg.get("mostrar_pontos_jitter", False),
                 intervalo_ticks_y=float(cfg.get("intervalo_ticks_y", 0.0)),
                 fig=self.plot_widget.fig,
+                series_controladas=["Bosque", "Estacionamento"],
             )
         else:
             renderizar_grafico_barras(
@@ -1010,6 +1015,7 @@ class VesperaMainWindow(QMainWindow):
                 hachuras_barras=self.sidebar.obter_hachuras_barras_ativas(),
                 espaco_subgrupos=float(cfg.get("espaco_subgrupos_barras", 0.35)),
                 espaco_barras=float(cfg.get("espaco_barras", 0.0)),
+                modo_desvio=cfg.get("modo_desvio_barras", MODO_DESVIO_ERRO),
             )
 
         self.plot_widget.atualizar_canvas()
@@ -1141,7 +1147,8 @@ class VesperaMainWindow(QMainWindow):
             try:
                 with open(caminho, "r", encoding="utf-8") as f:
                     proj = json.load(f)
-            except Exception:
+            except (OSError, ValueError):
+                logger.exception("Arquivo de projeto inválido: %s", caminho)
                 proj = {}
         if isinstance(proj, dict) and "dados" in proj:
             self.caminho_arquivo_atual = caminho
@@ -1263,6 +1270,7 @@ class VesperaMainWindow(QMainWindow):
                     json.dump(payload, f, ensure_ascii=False, indent=2)
                 self.status_bar.showMessage(f"Backup do projeto salvo em: {caminho}")
             except Exception as e:
+                logger.exception("Erro ao exportar projeto")
                 QMessageBox.critical(self, "Erro ao Exportar Projeto", str(e))
 
     def _importar_arquivo_projeto(self):
@@ -1287,6 +1295,7 @@ class VesperaMainWindow(QMainWindow):
                 else:
                     QMessageBox.warning(self, "Formato Inválido", "O arquivo selecionado não é um projeto válido.")
             except Exception as e:
+                logger.exception("Erro ao importar projeto")
                 QMessageBox.critical(self, "Erro ao Importar Projeto", str(e))
 
     def _importar_planilha(self):
@@ -1384,6 +1393,7 @@ class VesperaMainWindow(QMainWindow):
                     "ou 2 a 3 colunas para Dispersão (Ponto, X, Y).",
                 )
         except Exception as e:
+            logger.exception("Erro ao ler planilha")
             QMessageBox.critical(self, "Erro ao Ler Planilha", str(e))
 
     def _exportar_planilha_excel(self, caminho: str):
@@ -1433,6 +1443,7 @@ class VesperaMainWindow(QMainWindow):
                 self, "Planilha Exportada", f"Planilha Excel com gráfico nativo salva em:\n{caminho}"
             )
         except Exception as e:
+            logger.exception("Erro ao exportar planilha Excel")
             QMessageBox.critical(self, "Erro ao Exportar Planilha Excel", str(e))
 
     def _acionar_verificacao_atualizacao(self):

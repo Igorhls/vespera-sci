@@ -1,0 +1,5 @@
+# Ferramentas de desenvolvimento, testes e empacotamento.
+-r requirements.txt
+pyinstaller>=6.0,<7
+pytest>=8,<10
+ruff>=0.6

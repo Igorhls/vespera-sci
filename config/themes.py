@@ -188,6 +188,7 @@ DEFAULT_CONFIG = {
     "rotulo_s3": "Estacionamento",
     "rotulo_s4": "Desvio/p",
     "exibir_valores_barras": True,
+    "modo_desvio_barras": "erro",
     "formato_decimais_barras": "Automático (ex: 27,32 | 2,3)",
     "negrito_valores_barras": True,
     "largura_grupo_barras": 0.68,

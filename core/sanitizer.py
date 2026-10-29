@@ -7,76 +7,102 @@ import numpy as np
 import pandas as pd
 
 
-def sanitizar_dados_tabela(df: pd.DataFrame):
+def corrigir_escala_valor(v: float, limite_inferior: float = 60.0) -> float:
     """
-    Corrige automaticamente problemas comuns ao colar dados de temperatura/medições do Excel em PT-BR:
-    1. Vírgula que virou centena/milhar (ex: 27,4 -> 274.0 vira 27.4).
-    2. Valores vazios na coluna identificadora preenchidos como P1..Pn.
-    Compatível com qualquer número de colunas/séries dinâmicas.
+    Desfaz a perda da vírgula decimal ao colar medições do Excel em PT-BR (ex: 27,4 -> 274 -> 27,4).
+    Só deve ser aplicada quando o usuário confirmar explicitamente que os dados sofreram essa perda.
     """
+    if limite_inferior < v <= limite_inferior * 10.0:
+        return round(v / 10.0, 1)
+    if limite_inferior * 10.0 < v <= limite_inferior * 100.0:
+        return round(v / 100.0, 1)
+    return v
+
+
+def detectar_escala_suspeita(textos, limite_inferior: float = 60.0) -> bool:
+    """
+    Indica se um bloco colado parece ter perdido a vírgula decimal: todos os números são inteiros
+    (sem separador decimal) e ao menos um cai na faixa que seria corrigida por corrigir_escala_valor.
+    """
+    inteiros_suspeitos = 0
+    for txt in textos:
+        t = str(txt).strip()
+        if not t:
+            continue
+        try:
+            v = float(t.replace(",", "."))
+        except ValueError:
+            continue
+        if "," in t or "." in t:
+            return False
+        if corrigir_escala_valor(v, limite_inferior) != v:
+            inteiros_suspeitos += 1
+    return inteiros_suspeitos > 0
+
+
+def _normalizar_ids(df: pd.DataFrame, col_id: str, prefixo: str) -> bool:
     modificado = False
+    for idx in range(len(df)):
+        val = df.iloc[idx][col_id]
+        if pd.isna(val) or str(val).strip().lower() in ["none", "nan", ""]:
+            df.iloc[idx, df.columns.get_loc(col_id)] = f"{prefixo}{idx + 1}"
+            modificado = True
+    return modificado
+
+
+def _normalizar_numericos(df: pd.DataFrame, colunas, corrigir_escala: bool, limite_inferior: float) -> bool:
+    modificado = False
+    for col in colunas:
+        if col not in df.columns:
+            continue
+        convertidos = []
+        for val in df[col].tolist():
+            if pd.isna(val) or val == "":
+                convertidos.append(np.nan)
+                continue
+            try:
+                v_float = float(str(val).replace(",", "."))
+            except (ValueError, TypeError):
+                convertidos.append(np.nan)
+                continue
+            if corrigir_escala:
+                v_corr = corrigir_escala_valor(v_float, limite_inferior)
+                if v_corr != v_float:
+                    modificado = True
+                v_float = v_corr
+            convertidos.append(v_float)
+        df[col] = pd.Series(convertidos, index=df.index, dtype=float)
+    return modificado
+
+
+def sanitizar_dados_tabela(df: pd.DataFrame, corrigir_escala: bool = False):
+    """
+    Normaliza a tabela de séries (qualquer número de colunas):
+    1. Converte textos com vírgula decimal em float.
+    2. Preenche identificadores vazios como P1..Pn.
+    3. Opcionalmente (corrigir_escala=True) desfaz a perda da vírgula decimal (274 -> 27,4).
+       Nunca é aplicado sem confirmação do usuário, pois altera dados legítimos (ex: 1013 hPa).
+    """
     df_novo = df.copy()
     if df_novo.empty:
         return df_novo, False
 
     col_pontos = "Pontos" if "Pontos" in df_novo.columns else df_novo.columns[0]
-    for idx in range(len(df_novo)):
-        val_ponto = df_novo.iloc[idx][col_pontos]
-        if pd.isna(val_ponto) or str(val_ponto).strip().lower() in ["none", "nan", ""]:
-            df_novo.iloc[idx, df_novo.columns.get_loc(col_pontos)] = f"P{idx + 1}"
-            modificado = True
-
+    modificado = _normalizar_ids(df_novo, col_pontos, "P")
     cols_num = [c for c in df_novo.columns if c != col_pontos]
-    for col in cols_num:
-        for idx in range(len(df_novo)):
-            val = df_novo.iloc[idx][col]
-            if pd.notnull(val) and val != "":
-                try:
-                    v_float = float(str(val).replace(",", "."))
-                    if 60.0 < v_float <= 600.0:
-                        df_novo.iloc[idx, df_novo.columns.get_loc(col)] = round(v_float / 10.0, 1)
-                        modificado = True
-                    elif 600.0 < v_float <= 6000.0:
-                        df_novo.iloc[idx, df_novo.columns.get_loc(col)] = round(v_float / 100.0, 1)
-                        modificado = True
-                    else:
-                        df_novo.iloc[idx, df_novo.columns.get_loc(col)] = v_float
-                except (ValueError, TypeError):
-                    pass
-
+    modificado |= _normalizar_numericos(df_novo, cols_num, corrigir_escala, 60.0)
     return df_novo, modificado
 
 
-def sanitizar_dados_barras(df: pd.DataFrame):
-    """Sanitiza a tabela de Média e Desvio Padrão (TA)."""
-    modificado = False
+def sanitizar_dados_barras(df: pd.DataFrame, corrigir_escala: bool = False):
+    """Normaliza a tabela de Média e Desvio Padrão (correção de escala apenas sob demanda)."""
     df_novo = df.copy()
+    if df_novo.empty:
+        return df_novo, False
 
-    for idx in range(len(df_novo)):
-        val_mes = df_novo.iloc[idx]["Mes"]
-        if pd.isna(val_mes) or str(val_mes).strip().lower() in ["none", "nan", ""]:
-            df_novo.iloc[idx, df_novo.columns.get_loc("Mes")] = f"Mês {idx + 1}"
-            modificado = True
-
+    modificado = _normalizar_ids(df_novo, "Mes", "Mês ") if "Mes" in df_novo.columns else False
     cols_num = ["Bosque", "Desvio_Bosque", "Estacionamento", "Desvio_Estacionamento"]
-    for col in cols_num:
-        if col in df_novo.columns:
-            for idx in range(len(df_novo)):
-                val = df_novo.iloc[idx][col]
-                if pd.notnull(val):
-                    try:
-                        v_float = float(str(val).replace(",", "."))
-                        if 100.0 < v_float <= 1000.0:
-                            df_novo.iloc[idx, df_novo.columns.get_loc(col)] = round(v_float / 10.0, 2)
-                            modificado = True
-                        elif 1000.0 < v_float <= 10000.0:
-                            df_novo.iloc[idx, df_novo.columns.get_loc(col)] = round(v_float / 100.0, 2)
-                            modificado = True
-                        else:
-                            df_novo.iloc[idx, df_novo.columns.get_loc(col)] = v_float
-                    except (ValueError, TypeError):
-                        pass
-
+    modificado |= _normalizar_numericos(df_novo, cols_num, corrigir_escala, 100.0)
     return df_novo, modificado
 
 
@@ -107,27 +133,13 @@ def calcular_estatisticas_serie(valores) -> dict:
 
 def sanitizar_dados_dispersao(df: pd.DataFrame):
     """Sanitiza a tabela de Dispersão / Regressão (Ponto, X, Y)."""
-    modificado = False
     df_novo = df.copy()
+    if df_novo.empty:
+        return df_novo, False
 
     col_ponto = "Ponto" if "Ponto" in df_novo.columns else df_novo.columns[0]
-    for idx in range(len(df_novo)):
-        val_ponto = df_novo.iloc[idx][col_ponto]
-        if pd.isna(val_ponto) or str(val_ponto).strip().lower() in ["none", "nan", ""]:
-            df_novo.iloc[idx, df_novo.columns.get_loc(col_ponto)] = f"P{idx + 1}"
-            modificado = True
-
-    for col in ["X", "Y"]:
-        if col in df_novo.columns:
-            for idx in range(len(df_novo)):
-                val = df_novo.iloc[idx][col]
-                if pd.notnull(val):
-                    try:
-                        v_float = float(str(val).replace(",", "."))
-                        df_novo.iloc[idx, df_novo.columns.get_loc(col)] = v_float
-                    except (ValueError, TypeError):
-                        pass
-
+    modificado = _normalizar_ids(df_novo, col_ponto, "P")
+    _normalizar_numericos(df_novo, ["X", "Y"], False, 0.0)
     return df_novo, modificado
 
 
@@ -211,6 +223,7 @@ def calcular_regressao_linear(x_vals, y_vals) -> dict:
         "forca": forca,
         "direcao": direcao,
         "interpretacao": interpretacao,
+        "ss_xx": ss_xx,
         "media_x": x_mean,
         "desvio_x": float(np.std(x, ddof=1)) if n > 1 else 0.0,
         "min_x": float(np.min(x)),
@@ -221,6 +234,55 @@ def calcular_regressao_linear(x_vals, y_vals) -> dict:
         "max_y": float(np.max(y)),
     }
 
+
+
+# Quantis bicaudais exatos t(0,975; gl) para gl = 1..30
+_T_975 = [
+    12.7062, 4.3027, 3.1824, 2.7764, 2.5706, 2.4469, 2.3646, 2.3060, 2.2622, 2.2281,
+    2.2010, 2.1788, 2.1604, 2.1448, 2.1314, 2.1199, 2.1098, 2.1009, 2.0930, 2.0860,
+    2.0796, 2.0739, 2.0687, 2.0639, 2.0595, 2.0555, 2.0518, 2.0484, 2.0452, 2.0423,
+]
+
+
+def quantil_t_975(graus_liberdade: int) -> float:
+    """
+    Quantil 97,5% da distribuição t de Student (base do IC 95% bicaudal), sem depender do SciPy.
+    gl <= 30 usa a tabela exata; acima disso a expansão de Cornish-Fisher (erro < 1e-4).
+    """
+    gl = int(graus_liberdade)
+    if gl < 1:
+        raise ValueError("graus_liberdade deve ser >= 1")
+    if gl <= len(_T_975):
+        return _T_975[gl - 1]
+    z = 1.959963984540054
+    return float(
+        z
+        + (z ** 3 + z) / (4 * gl)
+        + (5 * z ** 5 + 16 * z ** 3 + 3 * z) / (96 * gl ** 2)
+        + (3 * z ** 7 + 19 * z ** 5 + 17 * z ** 3 - 15 * z) / (384 * gl ** 3)
+    )
+
+
+def calcular_banda_regressao(reg: dict, x_vals, nivel: float = 0.95, predicao: bool = False):
+    """
+    Banda em torno da reta de regressão para os pontos x_vals:
+    - predicao=False: intervalo de confiança da média ajustada  ŷ ± t·Se·√(1/n + (x−x̄)²/Sxx)
+    - predicao=True:  intervalo de predição de uma nova medição ŷ ± t·Se·√(1 + 1/n + (x−x̄)²/Sxx)
+    Retorna (inferior, superior) ou None se n <= 2 (sem graus de liberdade para Se).
+    """
+    if abs(nivel - 0.95) > 1e-9:
+        raise ValueError("Apenas o nível de 95% é suportado.")
+    if not reg or reg.get("n", 0) <= 2 or reg.get("ss_xx", 0) <= 0:
+        return None
+    x = np.asarray(x_vals, dtype=float)
+    n = reg["n"]
+    t = quantil_t_975(n - 2)
+    termo = 1.0 / n + (x - reg["media_x"]) ** 2 / reg["ss_xx"]
+    if predicao:
+        termo = termo + 1.0
+    meia_largura = t * reg["se"] * np.sqrt(termo)
+    y_hat = reg["slope"] * x + reg["intercept"]
+    return y_hat - meia_largura, y_hat + meia_largura
 
 
 def calcular_estatisticas_boxplot(valores) -> dict:

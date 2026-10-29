@@ -32,17 +32,27 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from config.presets import PRESETS_BARRAS, PRESETS_BOXPLOT, PRESETS_DISPERSAO
+from config.presets import PRESETS_BARRAS, PRESETS_BOXPLOT
 from core.sanitizer import (
     calcular_estatisticas_boxplot,
     calcular_estatisticas_serie,
     calcular_regressao_linear,
+    corrigir_escala_valor,
+    detectar_escala_suspeita,
     formatar_numero_ptbr,
     sanitizar_dados_barras,
     sanitizar_dados_dispersao,
     sanitizar_dados_tabela,
 )
 from ui.icons import get_icon
+
+
+def formatar_celula(valor: float, fmt_dec: str) -> str:
+    """Formata o valor para a célula sem descartar precisão (27.4 -> '27,4'; 27.35 -> '27,35')."""
+    texto = fmt_dec.format(valor)
+    if float(texto) != valor:
+        texto = f"{valor:.12g}"
+    return texto.replace(".", ",")
 
 
 class VesperaTable(QTableWidget):
@@ -173,19 +183,19 @@ class DataTableWidget(QWidget):
         grid_meta.addWidget(self.txt_rotulo_y, 1, 3)
 
         self.spn_min_y = QDoubleSpinBox()
-        self.spn_min_y.setRange(-100.0, 500.0)
+        self.spn_min_y.setRange(-1.0e6, 1.0e6)
         self.spn_min_y.setDecimals(1)
         self.spn_min_y.setSingleStep(1.0)
         self.spn_min_y.valueChanged.connect(self._on_meta_changed)
 
         self.spn_max_y = QDoubleSpinBox()
-        self.spn_max_y.setRange(-100.0, 500.0)
+        self.spn_max_y.setRange(-1.0e6, 1.0e6)
         self.spn_max_y.setDecimals(1)
         self.spn_max_y.setSingleStep(1.0)
         self.spn_max_y.valueChanged.connect(self._on_meta_changed)
 
         self.spn_intervalo_ticks_y = QDoubleSpinBox()
-        self.spn_intervalo_ticks_y.setRange(0.0, 100.0)
+        self.spn_intervalo_ticks_y.setRange(0.0, 1.0e5)
         self.spn_intervalo_ticks_y.setDecimals(1)
         self.spn_intervalo_ticks_y.setSingleStep(1.0)
         self.spn_intervalo_ticks_y.setValue(0.0)
@@ -209,19 +219,19 @@ class DataTableWidget(QWidget):
         # Controles de Limites X e Ticks X (visíveis no Modo Dispersão)
         self.lbl_lim_x = QLabel("<b>Limites X:</b>")
         self.spn_min_x = QDoubleSpinBox()
-        self.spn_min_x.setRange(-1000.0, 5000.0)
+        self.spn_min_x.setRange(-1.0e6, 1.0e6)
         self.spn_min_x.setDecimals(1)
         self.spn_min_x.setSingleStep(1.0)
         self.spn_min_x.valueChanged.connect(self._on_meta_changed)
 
         self.spn_max_x = QDoubleSpinBox()
-        self.spn_max_x.setRange(-1000.0, 5000.0)
+        self.spn_max_x.setRange(-1.0e6, 1.0e6)
         self.spn_max_x.setDecimals(1)
         self.spn_max_x.setSingleStep(1.0)
         self.spn_max_x.valueChanged.connect(self._on_meta_changed)
 
         self.spn_intervalo_ticks_x = QDoubleSpinBox()
-        self.spn_intervalo_ticks_x.setRange(0.0, 500.0)
+        self.spn_intervalo_ticks_x.setRange(0.0, 1.0e5)
         self.spn_intervalo_ticks_x.setDecimals(1)
         self.spn_intervalo_ticks_x.setSingleStep(0.5)
         self.spn_intervalo_ticks_x.setValue(0.0)
@@ -587,7 +597,7 @@ class DataTableWidget(QWidget):
         while self.table.rowCount() < total_linhas_necessarias:
             self._adicionar_linha()
 
-        self._updating_ui = True
+        celulas = []
         for i_row, linha in enumerate(linhas):
             curr_r = r_start + i_row
             delimitador = "\t" if "\t" in linha else (";" if ";" in linha else ",")
@@ -596,28 +606,56 @@ class DataTableWidget(QWidget):
                 curr_c = c_start + i_col
                 if curr_c >= self.table.columnCount():
                     break
-                # Sanitização básica de vírgula e escala
-                if curr_c > 0:
-                    val_clean = val.replace(",", ".")
-                    try:
-                        v_num = float(val_clean)
-                        if 60.0 < v_num <= 600.0 and self.tipo_grafico in ["linhas", "boxplot"]:
-                            v_num /= 10.0
-                        val = f"{v_num:.2f}".replace(".", ",")
-                    except ValueError:
-                        pass
-                item = self.table.item(curr_r, curr_c)
-                if not item:
-                    item = QTableWidgetItem()
-                    item.setTextAlignment(Qt.AlignCenter)
-                    self.table.setItem(curr_r, curr_c, item)
-                item.setText(val)
+                celulas.append((curr_r, curr_c, val))
+
+        corrigir = self._confirmar_correcao_escala([v for _, c, v in celulas if c > 0])
+
+        self._updating_ui = True
+        for curr_r, curr_c, val in celulas:
+            if curr_c > 0:
+                try:
+                    v_num = float(val.replace(",", "."))
+                    if corrigir:
+                        v_num = corrigir_escala_valor(v_num, self._limite_escala())
+                    val = f"{v_num:.12g}".replace(".", ",")
+                except ValueError:
+                    pass
+            item = self.table.item(curr_r, curr_c)
+            if not item:
+                item = QTableWidgetItem()
+                item.setTextAlignment(Qt.AlignCenter)
+                self.table.setItem(curr_r, curr_c, item)
+            item.setText(val)
 
         self._updating_ui = False
         self._ler_dataframe_da_tabela()
         self._popular_tabela()
         self.atualizar_sumario_estatistico()
         self.dataOrMetaChanged.emit()
+
+    def _limite_escala(self) -> float:
+        return 100.0 if self.tipo_grafico == "barras" else 60.0
+
+    def _confirmar_correcao_escala(self, textos) -> bool:
+        """
+        Pergunta ao usuário se deve desfazer a perda da vírgula decimal (274 -> 27,4).
+        Só é oferecido quando o bloco colado não tem nenhum separador decimal e há valores na faixa suspeita.
+        """
+        if self.tipo_grafico == "dispersao":
+            return False
+        if not detectar_escala_suspeita(textos, self._limite_escala()):
+            return False
+        resp = QMessageBox.question(
+            self,
+            "Possível perda da vírgula decimal",
+            "Os valores colados não têm separador decimal e alguns parecem estar multiplicados "
+            "por 10 ou 100 (ex: 274 em vez de 27,4).\n\n"
+            "Deseja dividir esses valores automaticamente?\n"
+            "Escolha 'Não' se os números já estão corretos (ex: pressão em hPa, CO₂ em ppm).",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        return resp == QMessageBox.Yes
 
     def _copiar_resumo_estatistico(self):
         txt = self.lbl_stats.text().replace("<br>", "\n").replace("<b>", "").replace("</b>", "").replace("&nbsp;", " ")
@@ -632,7 +670,6 @@ class DataTableWidget(QWidget):
         is_linhas = tipo_grafico == "linhas"
         is_barras = tipo_grafico == "barras"
         is_dispersao = tipo_grafico == "dispersao"
-        is_boxplot = tipo_grafico == "boxplot"
 
         self.grp_rotulos_barras.setVisible(is_barras)
         self.lbl_destino.setVisible(is_linhas)
@@ -788,7 +825,7 @@ class DataTableWidget(QWidget):
                         texto = ""
                     else:
                         try:
-                            texto = fmt_dec.format(float(val)).replace(".", ",")
+                            texto = formatar_celula(float(val), fmt_dec)
                         except (ValueError, TypeError):
                             texto = str(val)
                 item = QTableWidgetItem(texto)
@@ -1133,10 +1170,7 @@ class DataTableWidget(QWidget):
                 for l in linhas_raw:
                     val_str = l.replace(",", ".").strip()
                     try:
-                        v = float(val_str)
-                        if 60.0 < v <= 600.0:
-                            v = v / 10.0
-                        valores.append(v)
+                        valores.append(float(val_str))
                     except ValueError:
                         valores.append(np.nan)
 
@@ -1161,10 +1195,7 @@ class DataTableWidget(QWidget):
                     nums = []
                     for p in partes[:3]:
                         try:
-                            v = float(p)
-                            if 60.0 < v <= 600.0:
-                                v = v / 10.0
-                            nums.append(v)
+                            nums.append(float(p))
                         except ValueError:
                             nums.append(np.nan)
                     while len(nums) < 3:
@@ -1181,10 +1212,7 @@ class DataTableWidget(QWidget):
                     nums = []
                     for p in partes[1:4]:
                         try:
-                            v = float(p)
-                            if 60.0 < v <= 600.0:
-                                v = v / 10.0
-                            nums.append(v)
+                            nums.append(float(p))
                         except ValueError:
                             nums.append(np.nan)
                     while len(nums) < 3:
@@ -1192,7 +1220,8 @@ class DataTableWidget(QWidget):
                     novas_linhas.append([ponto_nome] + nums)
                 df_temp = pd.DataFrame(novas_linhas, columns=["Pontos", "Manha", "Tarde", "Noite"])
 
-            self.df_linhas, _ = sanitizar_dados_tabela(df_temp)
+            corrigir = self._confirmar_correcao_escala(self._tokens_numericos(linhas_raw))
+            self.df_linhas, _ = sanitizar_dados_tabela(df_temp, corrigir_escala=corrigir)
 
         elif self.tipo_grafico == "barras":
             novas_b = []
@@ -1221,7 +1250,8 @@ class DataTableWidget(QWidget):
                     novas_b,
                     columns=["Mes", "Bosque", "Desvio_Bosque", "Estacionamento", "Desvio_Estacionamento"],
                 )
-                self.df_barras, _ = sanitizar_dados_barras(df_b)
+                corrigir = self._confirmar_correcao_escala(self._tokens_numericos(linhas_raw))
+                self.df_barras, _ = sanitizar_dados_barras(df_b, corrigir_escala=corrigir)
 
         elif self.tipo_grafico == "dispersao":
             novas_disp = []
@@ -1262,12 +1292,32 @@ class DataTableWidget(QWidget):
                     linha_dados.append(np.nan)
                 novas_box.append(linha_dados)
             if novas_box:
-                self.df_boxplot = pd.DataFrame(novas_box, columns=cols_atuais)
+                df_box = pd.DataFrame(novas_box, columns=cols_atuais)
+                if self._confirmar_correcao_escala(self._tokens_numericos(linhas_raw)):
+                    for col in cols_atuais[1:]:
+                        df_box[col] = df_box[col].map(
+                            lambda v: v if pd.isna(v) else corrigir_escala_valor(float(v), self._limite_escala())
+                        )
+                self.df_boxplot = df_box
 
         self._popular_tabela()
         self.atualizar_sumario_estatistico()
         self.dataOrMetaChanged.emit()
         self.tabs.setCurrentIndex(0)
+
+    @staticmethod
+    def _tokens_numericos(linhas_raw) -> list:
+        """Valores colados (excluindo a primeira coluna textual de identificação) para checar a escala."""
+        tokens = []
+        for l in linhas_raw:
+            partes = [p.strip() for p in l.replace(";", "\t").split("\t") if p.strip()]
+            for p in partes:
+                try:
+                    float(p.replace(",", "."))
+                except ValueError:
+                    continue
+                tokens.append(p)
+        return tokens
 
     def _atualizar_calculadora(self, texto: str):
         partes = [
